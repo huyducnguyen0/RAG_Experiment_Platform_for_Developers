@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase 4 - Document Upload
+Current phase: Phase 5 - Document Chunking
 
 Current goal:
-Allow users to upload simple `.txt` and `.md` documents for later RAG steps.
+Automatically split uploaded documents into small chunks for later retrieval.
 
 Current constraints:
 - Do not build RAG yet.
@@ -13,13 +13,12 @@ Current constraints:
 - Store documents simply in local files/metadata for the MVP.
 
 Next task:
-Add document upload and listing endpoints:
-- POST /documents/upload
-- GET /documents
-- GET /documents/{document_id}
-- DELETE /documents/{document_id}
+Add chunking logic so uploaded documents produce reusable text chunks:
+- app/services/chunking_service.py
+- update app/services/document_service.py
+- update app/schemas/document.py
 
 Expected behavior:
-- Upload accepts only `.txt` and `.md`.
-- Uploaded documents are stored locally.
-- Document metadata can be listed and retrieved.
+- Uploading a document automatically creates chunks.
+- Document detail includes `chunk_count`.
+- Chunks are stored simply in local metadata for the MVP.
