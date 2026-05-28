@@ -6,14 +6,18 @@ from app.services.document_service import _load_metadata
 MIN_KEYWORD_LENGTH = 2
 
 
-def retrieve_relevant_chunks(question: str, top_k: int = 3) -> RetrieveResponse:
+def retrieve_relevant_chunks(
+    question: str,
+    top_k: int = 3,
+    workspace_id: str | None = None,
+) -> RetrieveResponse:
     keywords = _extract_keywords(question)
     results: list[RetrievedChunk] = []
 
     if not keywords:
         return RetrieveResponse(query=question, results=[])
 
-    for document in _load_metadata():
+    for document in _load_metadata(workspace_id):
         for chunk in document.get("chunks", []):
             score = _score_chunk(chunk["content"], keywords)
             if score <= 0:

@@ -14,6 +14,7 @@ export type DocumentChunk = {
 
 export type DocumentSummary = {
   id: string
+  workspace_id?: string | null
   title: string
   file_name: string
   file_type: string
@@ -30,6 +31,22 @@ export type DocumentDetail = DocumentSummary & {
 export type DeleteDocumentResponse = {
   deleted: boolean
   document_id: string
+}
+
+export type WorkspaceSummary = {
+  id: string
+  name: string
+  created_at: string
+  document_count: number
+}
+
+export type WorkspaceDetail = WorkspaceSummary & {
+  document_ids: string[]
+}
+
+export type DeleteWorkspaceResponse = {
+  deleted: boolean
+  workspace_id: string
 }
 
 export type ResearchQueryRequest = {

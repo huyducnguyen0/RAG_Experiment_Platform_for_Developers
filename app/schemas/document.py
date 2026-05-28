@@ -13,6 +13,7 @@ class DocumentChunk(BaseModel):
 
 class DocumentSummary(BaseModel):
     id: str
+    workspace_id: str | None = None
     title: str
     file_name: str
     file_type: str

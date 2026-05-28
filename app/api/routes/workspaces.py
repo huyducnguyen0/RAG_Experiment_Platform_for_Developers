@@ -1,0 +1,108 @@
+from fastapi import APIRouter, File, UploadFile
+
+from app.schemas.document import (
+    DeleteDocumentResponse,
+    DocumentDetail,
+    DocumentSummary,
+)
+from app.schemas.research import (
+    ResearchQueryRequest,
+    ResearchQueryResponse,
+    RetrieveRequest,
+    RetrieveResponse,
+)
+from app.schemas.workspace import (
+    DeleteWorkspaceResponse,
+    WorkspaceCreate,
+    WorkspaceDetail,
+    WorkspaceSummary,
+)
+from app.services.document_service import (
+    delete_document,
+    get_document,
+    list_documents,
+    save_uploaded_document,
+)
+from app.services.rag_service import answer_research_query
+from app.services.retrieval_service import retrieve_relevant_chunks
+from app.services.workspace_service import (
+    create_workspace,
+    delete_workspace,
+    ensure_workspace_exists,
+    get_workspace,
+    list_workspaces,
+)
+
+router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+
+
+@router.post("", response_model=WorkspaceDetail)
+def create_new_workspace(request: WorkspaceCreate):
+    return create_workspace(request.name)
+
+
+@router.get("", response_model=list[WorkspaceSummary])
+def get_workspaces():
+    return list_workspaces()
+
+
+@router.get("/{workspace_id}", response_model=WorkspaceDetail)
+def get_workspace_detail(workspace_id: str):
+    return get_workspace(workspace_id)
+
+
+@router.delete("/{workspace_id}", response_model=DeleteWorkspaceResponse)
+def remove_workspace(workspace_id: str):
+    delete_workspace(workspace_id)
+    return DeleteWorkspaceResponse(deleted=True, workspace_id=workspace_id)
+
+
+@router.post("/{workspace_id}/documents/upload", response_model=DocumentDetail)
+def upload_workspace_document(
+    workspace_id: str,
+    file: UploadFile = File(...),
+):
+    ensure_workspace_exists(workspace_id)
+    return save_uploaded_document(file, workspace_id=workspace_id)
+
+
+@router.get("/{workspace_id}/documents", response_model=list[DocumentSummary])
+def get_workspace_documents(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    return list_documents(workspace_id=workspace_id)
+
+
+@router.get("/{workspace_id}/documents/{document_id}", response_model=DocumentDetail)
+def get_workspace_document_detail(workspace_id: str, document_id: str):
+    ensure_workspace_exists(workspace_id)
+    return get_document(document_id, workspace_id=workspace_id)
+
+
+@router.delete(
+    "/{workspace_id}/documents/{document_id}",
+    response_model=DeleteDocumentResponse,
+)
+def remove_workspace_document(workspace_id: str, document_id: str):
+    ensure_workspace_exists(workspace_id)
+    delete_document(document_id, workspace_id=workspace_id)
+    return DeleteDocumentResponse(deleted=True, document_id=document_id)
+
+
+@router.post("/{workspace_id}/research/retrieve", response_model=RetrieveResponse)
+def retrieve_from_workspace(workspace_id: str, request: RetrieveRequest):
+    ensure_workspace_exists(workspace_id)
+    return retrieve_relevant_chunks(
+        question=request.question,
+        top_k=request.top_k,
+        workspace_id=workspace_id,
+    )
+
+
+@router.post("/{workspace_id}/research/query", response_model=ResearchQueryResponse)
+def query_workspace(workspace_id: str, request: ResearchQueryRequest):
+    ensure_workspace_exists(workspace_id)
+    return answer_research_query(
+        question=request.question,
+        top_k=request.top_k,
+        workspace_id=workspace_id,
+    )

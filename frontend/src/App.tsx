@@ -4,43 +4,57 @@ import {
   AlertCircle,
   Database,
   FileText,
+  Folder,
   Loader2,
+  Plus,
   RefreshCcw,
   Search,
   Trash2,
   Upload,
 } from 'lucide-react'
 import {
-  deleteDocument,
-  fetchDocument,
+  createWorkspace,
+  deleteWorkspaceDocument,
   fetchHealth,
-  listDocuments,
-  queryResearch,
-  uploadDocument,
+  fetchWorkspaceDocument,
+  listWorkspaceDocuments,
+  listWorkspaces,
+  queryWorkspaceResearch,
+  uploadWorkspaceDocument,
 } from './api/client'
 import type {
   DocumentDetail,
   DocumentSummary,
   ResearchQueryResponse,
+  WorkspaceSummary,
 } from './types/api'
 
 type HealthState = 'checking' | 'online' | 'offline'
 
 function App() {
   const [health, setHealth] = useState<HealthState>('checking')
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('')
+  const [workspaceName, setWorkspaceName] = useState('New research workspace')
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
-  const [selectedId, setSelectedId] = useState<string>('')
+  const [selectedDocumentId, setSelectedDocumentId] = useState('')
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
-  const [question, setQuestion] = useState('What does this document say about RAG?')
+  const [question, setQuestion] = useState('What does this workspace say about RAG?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
   const [notice, setNotice] = useState('')
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
 
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
+    [workspaces, selectedWorkspaceId],
+  )
+
   const selectedDocumentSummary = useMemo(
-    () => documents.find((document) => document.id === selectedId),
-    [documents, selectedId],
+    () => documents.find((document) => document.id === selectedDocumentId),
+    [documents, selectedDocumentId],
   )
 
   async function refreshHealth() {
@@ -53,34 +67,55 @@ function App() {
     }
   }
 
-  async function refreshDocuments(nextSelectedId?: string) {
-    const items = await listDocuments()
-    setDocuments(items)
+  async function refreshWorkspaces(nextWorkspaceId?: string) {
+    const items = await listWorkspaces()
+    setWorkspaces(items)
 
-    if (nextSelectedId) {
-      await selectDocument(nextSelectedId)
+    if (nextWorkspaceId) {
+      await selectWorkspace(nextWorkspaceId)
       return
     }
 
-    if (!selectedId && items.length > 0) {
-      await selectDocument(items[0].id)
+    if (!selectedWorkspaceId && items.length > 0) {
+      await selectWorkspace(items[0].id)
       return
     }
 
-    if (selectedId && !items.some((item) => item.id === selectedId)) {
-      await selectDocument(items[0]?.id ?? '')
+    if (selectedWorkspaceId && !items.some((item) => item.id === selectedWorkspaceId)) {
+      await selectWorkspace(items[0]?.id ?? '')
     }
   }
 
-  async function loadDocument(documentId: string) {
-    if (!documentId) {
+  async function selectWorkspace(workspaceId: string) {
+    setSelectedWorkspaceId(workspaceId)
+    setSelectedDocumentId('')
+    setSelectedDocument(null)
+    setAnswer(null)
+
+    if (!workspaceId) {
+      setDocuments([])
+      return
+    }
+
+    const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
+    setDocuments(workspaceDocuments)
+
+    if (workspaceDocuments.length > 0) {
+      await selectDocument(workspaceId, workspaceDocuments[0].id)
+    }
+  }
+
+  async function selectDocument(workspaceId: string, documentId: string) {
+    setSelectedDocumentId(documentId)
+
+    if (!workspaceId || !documentId) {
       setSelectedDocument(null)
       return
     }
 
     setIsLoadingDocument(true)
     try {
-      const detail = await fetchDocument(documentId)
+      const detail = await fetchWorkspaceDocument(workspaceId, documentId)
       setSelectedDocument(detail)
     } catch (error) {
       setNotice(getErrorMessage(error))
@@ -89,19 +124,38 @@ function App() {
     }
   }
 
-  async function selectDocument(documentId: string) {
-    setSelectedId(documentId)
-    await loadDocument(documentId)
+  async function handleCreateWorkspace() {
+    setIsCreatingWorkspace(true)
+    setNotice('')
+
+    try {
+      const workspace = await createWorkspace(workspaceName)
+      setWorkspaceName('New research workspace')
+      await refreshWorkspaces(workspace.id)
+      setNotice(`Created workspace ${workspace.name}`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsCreatingWorkspace(false)
+    }
   }
 
   async function handleUpload(file: File) {
+    if (!selectedWorkspaceId) {
+      setNotice('Create or select a workspace first')
+      return
+    }
+
     setIsUploading(true)
     setNotice('')
     try {
-      const uploaded = await uploadDocument(file)
-      await refreshDocuments(uploaded.id)
+      const uploaded = await uploadWorkspaceDocument(selectedWorkspaceId, file)
+      const workspaceDocuments = await listWorkspaceDocuments(selectedWorkspaceId)
+      setDocuments(workspaceDocuments)
+      setSelectedDocumentId(uploaded.id)
       setSelectedDocument(uploaded)
       setNotice(`Uploaded ${uploaded.file_name}`)
+      await refreshWorkspaces(selectedWorkspaceId)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
@@ -109,15 +163,22 @@ function App() {
     }
   }
 
-  async function handleDelete(documentId: string) {
+  async function handleDeleteDocument(documentId: string) {
+    if (!selectedWorkspaceId) {
+      return
+    }
+
     setNotice('')
     try {
-      await deleteDocument(documentId)
-      if (selectedId === documentId) {
-        setSelectedId('')
-        setSelectedDocument(null)
+      await deleteWorkspaceDocument(selectedWorkspaceId, documentId)
+      const workspaceDocuments = await listWorkspaceDocuments(selectedWorkspaceId)
+      setDocuments(workspaceDocuments)
+      setSelectedDocumentId('')
+      setSelectedDocument(null)
+      if (workspaceDocuments.length > 0) {
+        await selectDocument(selectedWorkspaceId, workspaceDocuments[0].id)
       }
-      await refreshDocuments()
+      await refreshWorkspaces(selectedWorkspaceId)
       setNotice('Document deleted')
     } catch (error) {
       setNotice(getErrorMessage(error))
@@ -125,10 +186,18 @@ function App() {
   }
 
   async function handleResearchQuery() {
+    if (!selectedWorkspaceId) {
+      setNotice('Create or select a workspace first')
+      return
+    }
+
     setIsQuerying(true)
     setNotice('')
     try {
-      const result = await queryResearch({ question, top_k: 3 })
+      const result = await queryWorkspaceResearch(selectedWorkspaceId, {
+        question,
+        top_k: 3,
+      })
       setAnswer(result)
     } catch (error) {
       setNotice(getErrorMessage(error))
@@ -152,24 +221,42 @@ function App() {
         }
       })
 
-    listDocuments()
-      .then((items) => {
+    listWorkspaces()
+      .then(async (items) => {
         if (!isMounted) {
-          return null
+          return
         }
 
-        setDocuments(items)
-        const firstDocumentId = items[0]?.id
+        if (items.length === 0) {
+          const workspace = await createWorkspace('My Research Workspace')
+          if (!isMounted) {
+            return
+          }
+          setWorkspaces([workspace])
+          setSelectedWorkspaceId(workspace.id)
+          setDocuments([])
+          return
+        }
+
+        setWorkspaces(items)
+        const workspaceId = items[0].id
+        setSelectedWorkspaceId(workspaceId)
+
+        const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
+        if (!isMounted) {
+          return
+        }
+
+        setDocuments(workspaceDocuments)
+        const firstDocumentId = workspaceDocuments[0]?.id
 
         if (!firstDocumentId) {
-          return null
+          return
         }
 
-        setSelectedId(firstDocumentId)
-        return fetchDocument(firstDocumentId)
-      })
-      .then((detail) => {
-        if (isMounted && detail) {
+        setSelectedDocumentId(firstDocumentId)
+        const detail = await fetchWorkspaceDocument(workspaceId, firstDocumentId)
+        if (isMounted) {
           setSelectedDocument(detail)
         }
       })
@@ -189,7 +276,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Agentic Research OS</p>
-          <h1>Research Workspace</h1>
+          <h1>Notebook Workspace</h1>
         </div>
         <button className="status-button" type="button" onClick={refreshHealth}>
           <Activity size={18} aria-hidden="true" />
@@ -206,11 +293,50 @@ function App() {
       )}
 
       <section className="workspace">
-        <aside className="sidebar" aria-label="Document controls">
+        <aside className="sidebar" aria-label="Workspace and document controls">
+          <section className="panel workspace-panel">
+            <div className="panel-heading">
+              <Folder size={18} aria-hidden="true" />
+              <h2>Workspaces</h2>
+            </div>
+            <div className="create-row">
+              <input
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                placeholder="Workspace name"
+              />
+              <button
+                className="icon-button"
+                type="button"
+                onClick={handleCreateWorkspace}
+                title="Create workspace"
+              >
+                {isCreatingWorkspace ? (
+                  <Loader2 className="spin" size={17} aria-hidden="true" />
+                ) : (
+                  <Plus size={17} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            <div className="workspace-list">
+              {workspaces.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  className={`workspace-item ${workspace.id === selectedWorkspaceId ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => selectWorkspace(workspace.id)}
+                >
+                  <span>{workspace.name}</span>
+                  <small>{workspace.document_count} documents</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="panel upload-panel">
             <div className="panel-heading">
               <Upload size={18} aria-hidden="true" />
-              <h2>Upload</h2>
+              <h2>Upload to Workspace</h2>
             </div>
             <label className="upload-zone">
               <input
@@ -239,20 +365,25 @@ function App() {
                 <Database size={18} aria-hidden="true" />
                 <h2>Documents</h2>
               </div>
-              <button className="icon-button" type="button" onClick={() => refreshDocuments()} title="Refresh documents">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => selectedWorkspaceId && selectWorkspace(selectedWorkspaceId)}
+                title="Refresh documents"
+              >
                 <RefreshCcw size={17} aria-hidden="true" />
               </button>
             </div>
             <div className="document-list">
               {documents.length === 0 ? (
-                <p className="muted">No documents yet.</p>
+                <p className="muted">No documents in this workspace yet.</p>
               ) : (
                 documents.map((document) => (
                   <button
                     key={document.id}
-                    className={`document-item ${document.id === selectedId ? 'active' : ''}`}
+                    className={`document-item ${document.id === selectedDocumentId ? 'active' : ''}`}
                     type="button"
-                    onClick={() => selectDocument(document.id)}
+                    onClick={() => selectDocument(selectedWorkspaceId, document.id)}
                   >
                     <span className="document-title">{document.title}</span>
                     <span className="document-meta">
@@ -270,13 +401,13 @@ function App() {
             <div className="panel-heading with-action">
               <div>
                 <FileText size={18} aria-hidden="true" />
-                <h2>{selectedDocumentSummary?.title ?? 'Document Detail'}</h2>
+                <h2>{selectedDocumentSummary?.title ?? selectedWorkspace?.name ?? 'Workspace Detail'}</h2>
               </div>
               {selectedDocument && (
                 <button
                   className="danger-button"
                   type="button"
-                  onClick={() => handleDelete(selectedDocument.id)}
+                  onClick={() => handleDeleteDocument(selectedDocument.id)}
                 >
                   <Trash2 size={16} aria-hidden="true" />
                   Delete
@@ -292,21 +423,21 @@ function App() {
             ) : selectedDocument ? (
               <DocumentDetailView document={selectedDocument} />
             ) : (
-              <p className="muted">Select or upload a document to inspect its content and chunks.</p>
+              <p className="muted">Upload a document to the selected workspace to inspect content and chunks.</p>
             )}
           </section>
 
           <section className="panel research-panel">
             <div className="panel-heading">
               <Search size={18} aria-hidden="true" />
-              <h2>Research Query</h2>
+              <h2>Workspace Query</h2>
             </div>
             <div className="query-row">
               <textarea
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
                 rows={3}
-                placeholder="Ask a question about your uploaded documents"
+                placeholder="Ask about documents in the selected workspace"
               />
               <button className="primary-button" type="button" onClick={handleResearchQuery} disabled={isQuerying}>
                 {isQuerying ? <Loader2 className="spin" size={17} aria-hidden="true" /> : <Search size={17} aria-hidden="true" />}
@@ -356,7 +487,7 @@ function DocumentDetailView({ document }: { document: DocumentDetail }) {
 
 function SourceList({ answer }: { answer: ResearchQueryResponse }) {
   if (answer.sources.length === 0) {
-    return <p className="muted">No sources returned.</p>
+    return <p className="muted">No sources returned from this workspace.</p>
   }
 
   return (

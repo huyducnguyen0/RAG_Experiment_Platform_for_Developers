@@ -5,8 +5,16 @@ from app.services.retrieval_service import retrieve_relevant_chunks
 SOURCE_PREVIEW_LENGTH = 180
 
 
-def answer_research_query(question: str, top_k: int = 3) -> ResearchQueryResponse:
-    retrieval = retrieve_relevant_chunks(question=question, top_k=top_k)
+def answer_research_query(
+    question: str,
+    top_k: int = 3,
+    workspace_id: str | None = None,
+) -> ResearchQueryResponse:
+    retrieval = retrieve_relevant_chunks(
+        question=question,
+        top_k=top_k,
+        workspace_id=workspace_id,
+    )
     sources = [
         _to_source(result)
         for result in retrieval.results
