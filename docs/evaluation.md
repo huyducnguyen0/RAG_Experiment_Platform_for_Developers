@@ -39,6 +39,11 @@ From project root:
 uv run python scripts/run_retrieval_eval.py
 ```
 
+After each run, the script also saves timestamped files:
+
+- `reports/retrieval_eval_YYYYMMDD_HHMMSS.json`
+- `reports/retrieval_eval_YYYYMMDD_HHMMSS.md`
+
 ## Metrics
 
 The script prints:
@@ -53,3 +58,4 @@ The script prints:
 
 - If workspace ids or chunk ids change after re-uploading files, update the dataset.
 - Keep this as the baseline before adding vector, hybrid, or reranking strategies.
+- You can compare historical runs by opening files in `reports/`.

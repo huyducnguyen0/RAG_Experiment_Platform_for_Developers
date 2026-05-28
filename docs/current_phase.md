@@ -1,23 +1,21 @@
 # Current Phase
 
-Current phase: Phase Clean 0 - Product Repositioning Alignment
+Current phase: Phase Eval 2 - Evaluation Report Export
 
 Current goal:
-Align architecture and frontend direction to the new product identity:
-"RAG Experiment Platform for Developers".
+Export evaluation results into JSON/Markdown report files with timestamped outputs for comparison.
 
 Current constraints:
-- Keep existing working APIs stable.
-- Do not add vector/hybrid/rerank implementation in this phase.
-- Keep local persistent storage (no production DB migration yet).
-- Keep scope focused on planning + migration mapping.
+- Keep keyword baseline as-is (no vector/hybrid/rerank yet).
+- Keep workspace data local persistent storage.
+- No production database migration.
 
 Next task:
-- Finalize restructure plan and frontend rebuild plan.
-- Start Phase Eval 2 implementation next:
-  - export evaluation reports to JSON/Markdown
-  - timestamped run outputs for comparison
+- Move to Phase Eval 3:
+  - add golden question upload/list APIs per workspace
+  - wire frontend Golden Questions tab to those APIs
 
 Expected behavior:
-- Team has a clear migration map before heavy code changes.
-- Next coding steps follow a stable, testable sequence.
+- Running eval script prints metrics and writes:
+  - reports/retrieval_eval_*.json
+  - reports/retrieval_eval_*.md
