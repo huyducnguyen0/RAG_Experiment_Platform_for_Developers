@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase 7 - RAG Query
+Current phase: Phase 8 - Sources/Citations Polish
 
 Current goal:
-Answer research questions using retrieved document chunks as context.
+Make RAG responses clearer by polishing source/citation fields.
 
 Current constraints:
 - Do not build RAG yet.
@@ -13,14 +13,12 @@ Current constraints:
 - Store documents simply in local files/metadata for the MVP.
 
 Next task:
-Add RAG-style query flow:
-- POST /research/query
-- app/services/ai_service.py
-- app/services/rag_service.py
-- update app/schemas/research.py
-- update app/api/routes/research.py
+Improve source output:
+- Add source_id mapping.
+- Keep document_title, chunk_id, score, and excerpt/preview clear.
+- Optionally mention source numbers in the mock answer.
 
 Expected behavior:
-- POST /research/query retrieves chunks, builds context, and returns answer + sources.
-- It works in mock mode without API keys.
-- If no chunks match, it says the documents do not contain enough information.
+- POST /research/query returns answer + readable sources.
+- Each source is easy to map back to a document chunk.
+- Still no frontend, auth, vector DB, or real LLM required.
