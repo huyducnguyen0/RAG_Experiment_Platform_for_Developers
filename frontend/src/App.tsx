@@ -8,6 +8,7 @@ import {
   Loader2,
   Plus,
   RefreshCcw,
+  Save,
   Search,
   Trash2,
   Upload,
@@ -20,6 +21,7 @@ import {
   listWorkspaceDocuments,
   listWorkspaces,
   queryWorkspaceResearch,
+  renameWorkspace,
   uploadWorkspaceDocument,
 } from './api/client'
 import type {
@@ -36,6 +38,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('')
   const [workspaceName, setWorkspaceName] = useState('New research workspace')
+  const [selectedWorkspaceName, setSelectedWorkspaceName] = useState('')
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [selectedDocumentId, setSelectedDocumentId] = useState('')
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
@@ -43,6 +46,7 @@ function App() {
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
   const [notice, setNotice] = useState('')
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
+  const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
@@ -94,8 +98,12 @@ function App() {
 
     if (!workspaceId) {
       setDocuments([])
+      setSelectedWorkspaceName('')
       return
     }
+
+    const workspace = workspaces.find((item) => item.id === workspaceId)
+    setSelectedWorkspaceName(workspace?.name ?? '')
 
     const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
     setDocuments(workspaceDocuments)
@@ -131,12 +139,40 @@ function App() {
     try {
       const workspace = await createWorkspace(workspaceName)
       setWorkspaceName('New research workspace')
+      setSelectedWorkspaceName(workspace.name)
       await refreshWorkspaces(workspace.id)
       setNotice(`Created workspace ${workspace.name}`)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
       setIsCreatingWorkspace(false)
+    }
+  }
+
+  async function handleRenameWorkspace() {
+    if (!selectedWorkspaceId) {
+      setNotice('Select a workspace first')
+      return
+    }
+
+    setIsRenamingWorkspace(true)
+    setNotice('')
+
+    try {
+      const renamed = await renameWorkspace(selectedWorkspaceId, selectedWorkspaceName)
+      setWorkspaces((items) =>
+        items.map((item) =>
+          item.id === renamed.id
+            ? { ...item, name: renamed.name }
+            : item,
+        ),
+      )
+      setSelectedWorkspaceName(renamed.name)
+      setNotice(`Renamed workspace to ${renamed.name}`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsRenamingWorkspace(false)
     }
   }
 
@@ -234,6 +270,7 @@ function App() {
           }
           setWorkspaces([workspace])
           setSelectedWorkspaceId(workspace.id)
+          setSelectedWorkspaceName(workspace.name)
           setDocuments([])
           return
         }
@@ -241,6 +278,7 @@ function App() {
         setWorkspaces(items)
         const workspaceId = items[0].id
         setSelectedWorkspaceId(workspaceId)
+        setSelectedWorkspaceName(items[0].name)
 
         const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
         if (!isMounted) {
@@ -330,6 +368,27 @@ function App() {
                   <small>{workspace.document_count} documents</small>
                 </button>
               ))}
+            </div>
+            <div className="rename-row">
+              <input
+                value={selectedWorkspaceName}
+                onChange={(event) => setSelectedWorkspaceName(event.target.value)}
+                placeholder="Selected workspace name"
+                disabled={!selectedWorkspaceId}
+              />
+              <button
+                className="icon-button"
+                type="button"
+                onClick={handleRenameWorkspace}
+                title="Rename selected workspace"
+                disabled={!selectedWorkspaceId || isRenamingWorkspace}
+              >
+                {isRenamingWorkspace ? (
+                  <Loader2 className="spin" size={17} aria-hidden="true" />
+                ) : (
+                  <Save size={17} aria-hidden="true" />
+                )}
+              </button>
             </div>
           </section>
 

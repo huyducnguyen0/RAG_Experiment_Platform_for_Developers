@@ -44,6 +44,26 @@ def get_workspace(workspace_id: str) -> WorkspaceDetail:
     return _to_detail(_find_workspace(workspace_id))
 
 
+def rename_workspace(workspace_id: str, name: str) -> WorkspaceDetail:
+    clean_name = name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Workspace name is required")
+
+    workspaces = _load_workspace_index()
+    workspace = next(
+        (item for item in workspaces if item["id"] == workspace_id),
+        None,
+    )
+
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    workspace["name"] = clean_name
+    _save_workspace_index(workspaces)
+
+    return _to_detail(workspace)
+
+
 def delete_workspace(workspace_id: str) -> None:
     workspace = _find_workspace(workspace_id)
     remaining = [

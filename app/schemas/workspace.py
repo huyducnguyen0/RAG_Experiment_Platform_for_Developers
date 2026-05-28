@@ -5,6 +5,10 @@ class WorkspaceCreate(BaseModel):
     name: str
 
 
+class WorkspaceUpdate(BaseModel):
+    name: str
+
+
 class WorkspaceSummary(BaseModel):
     id: str
     name: str

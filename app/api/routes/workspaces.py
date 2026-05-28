@@ -16,6 +16,7 @@ from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceDetail,
     WorkspaceSummary,
+    WorkspaceUpdate,
 )
 from app.services.document_service import (
     delete_document,
@@ -31,6 +32,7 @@ from app.services.workspace_service import (
     ensure_workspace_exists,
     get_workspace,
     list_workspaces,
+    rename_workspace,
 )
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -49,6 +51,11 @@ def get_workspaces():
 @router.get("/{workspace_id}", response_model=WorkspaceDetail)
 def get_workspace_detail(workspace_id: str):
     return get_workspace(workspace_id)
+
+
+@router.patch("/{workspace_id}", response_model=WorkspaceDetail)
+def update_workspace(workspace_id: str, request: WorkspaceUpdate):
+    return rename_workspace(workspace_id, request.name)
 
 
 @router.delete("/{workspace_id}", response_model=DeleteWorkspaceResponse)

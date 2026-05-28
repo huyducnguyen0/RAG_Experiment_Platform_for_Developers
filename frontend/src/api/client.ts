@@ -33,6 +33,19 @@ export async function createWorkspace(name: string): Promise<WorkspaceDetail> {
   })
 }
 
+export async function renameWorkspace(
+  workspaceId: string,
+  name: string,
+): Promise<WorkspaceDetail> {
+  return request(`/workspaces/${workspaceId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
 export async function fetchDocument(documentId: string): Promise<DocumentDetail> {
   return request(`/documents/${documentId}`)
 }
