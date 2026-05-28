@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase 5 - Document Chunking
+Current phase: Phase 6 - Simple Retrieval
 
 Current goal:
-Automatically split uploaded documents into small chunks for later retrieval.
+Retrieve relevant chunks from uploaded documents using simple keyword matching.
 
 Current constraints:
 - Do not build RAG yet.
@@ -13,12 +13,13 @@ Current constraints:
 - Store documents simply in local files/metadata for the MVP.
 
 Next task:
-Add chunking logic so uploaded documents produce reusable text chunks:
-- app/services/chunking_service.py
-- update app/services/document_service.py
-- update app/schemas/document.py
+Add keyword retrieval:
+- app/api/routes/research.py
+- app/schemas/research.py
+- app/services/retrieval_service.py
+- include research router in app/main.py
 
 Expected behavior:
-- Uploading a document automatically creates chunks.
-- Document detail includes `chunk_count`.
-- Chunks are stored simply in local metadata for the MVP.
+- POST /research/retrieve accepts a question and top_k.
+- It returns the most relevant chunks by keyword score.
+- It does not call an LLM or vector database.

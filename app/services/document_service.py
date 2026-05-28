@@ -5,7 +5,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
 
-from app.schemas.document import DocumentDetail, DocumentSummary
+from app.schemas.document import DocumentChunk, DocumentDetail, DocumentSummary
+from app.services.chunking_service import chunk_text
 
 DATA_DIR = Path("data")
 DOCUMENTS_DIR = DATA_DIR / "documents"
@@ -24,6 +25,7 @@ def save_uploaded_document(file: UploadFile) -> DocumentDetail:
 
     _ensure_storage()
     stored_path.write_text(content, encoding="utf-8")
+    chunks = chunk_text(document_id, content)
 
     metadata = {
         "id": document_id,
@@ -31,6 +33,8 @@ def save_uploaded_document(file: UploadFile) -> DocumentDetail:
         "file_name": file_name,
         "file_type": file_type,
         "content_length": len(content),
+        "chunk_count": len(chunks),
+        "chunks": [chunk.model_dump() for chunk in chunks],
         "created_at": datetime.now(UTC).isoformat(),
         "stored_file_name": stored_file_name,
     }
@@ -153,12 +157,19 @@ def _to_summary(metadata: dict) -> DocumentSummary:
         file_name=metadata["file_name"],
         file_type=metadata["file_type"],
         content_length=metadata["content_length"],
+        chunk_count=metadata.get("chunk_count", len(metadata.get("chunks", []))),
         created_at=metadata["created_at"],
     )
 
 
 def _to_detail(metadata: dict, content: str) -> DocumentDetail:
+    chunks = [
+        DocumentChunk(**chunk)
+        for chunk in metadata.get("chunks", [])
+    ]
+
     return DocumentDetail(
         **_to_summary(metadata).model_dump(),
         content=content,
+        chunks=chunks,
     )
