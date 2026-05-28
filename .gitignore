@@ -29,6 +29,14 @@ logs/
 # Data
 data/raw/
 data/processed/
+data/metadata.json
+data/documents/*
+!data/documents/.gitkeep
+data/workspaces/*
+!data/workspaces/.gitkeep
+
+# Evaluation outputs
+reports/
 
 # Testing
 .pytest_cache/
