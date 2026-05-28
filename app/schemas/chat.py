@@ -7,3 +7,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    mode: str = "mock"

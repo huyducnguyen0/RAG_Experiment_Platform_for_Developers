@@ -8,5 +8,4 @@ router = APIRouter()
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    answer = generate_answer(request.question)
-    return ChatResponse(answer=answer)
+    return generate_answer(request.question)

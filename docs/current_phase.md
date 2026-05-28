@@ -1,22 +1,25 @@
 # Current Phase
 
-Current phase: Phase 3 - Chat Service Mock
+Current phase: Phase 4 - Document Upload
 
 Current goal:
-Make the chat service more structured so it can later be replaced by real LLM/RAG logic.
+Allow users to upload simple `.txt` and `.md` documents for later RAG steps.
 
 Current constraints:
 - Do not build RAG yet.
 - Do not add vector database yet.
 - Do not add frontend yet.
-- Focus only on understanding project structure, route, schema, and service.
+- Do not add production database yet.
+- Store documents simply in local files/metadata for the MVP.
 
 Next task:
-Update the chat flow so:
-- app/api/routes/chat.py stays thin.
-- app/services/chat_service.py owns the mock answer logic.
-- app/schemas/chat.py returns a structured response with `answer` and `mode`.
+Add document upload and listing endpoints:
+- POST /documents/upload
+- GET /documents
+- GET /documents/{document_id}
+- DELETE /documents/{document_id}
 
-Expected behavior must stay the same:
-- GET /health returns {"status": "ok"}
-- POST /chat returns a mock answer and mode metadata.
+Expected behavior:
+- Upload accepts only `.txt` and `.md`.
+- Uploaded documents are stored locally.
+- Document metadata can be listed and retrieved.
