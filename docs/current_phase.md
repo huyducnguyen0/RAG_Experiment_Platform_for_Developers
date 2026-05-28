@@ -1,25 +1,24 @@
 # Current Phase
 
-Current phase: Phase Eval 1 - Golden Dataset and Keyword Baseline Metrics
+Current phase: Phase Eval 2 - Evaluation Report Export
 
 Current goal:
-Create a small evaluation dataset and measure the current keyword retrieval baseline.
+Export evaluation results into report files for portfolio and comparison tracking.
 
 Current constraints:
 - Do not add vector database yet.
 - Do not add production database yet.
 - Keep workspace data local for the MVP.
 - Do not add real LLM calls yet.
-- Evaluate the existing keyword retrieval before adding advanced strategies.
+- Use the same baseline dataset from Eval 1.
 
 Next task:
-Add evaluation foundation:
-- eval/golden_questions.jsonl
-- scripts/run_retrieval_eval.py
-- app/services/evaluation_service.py if useful
-- docs/evaluation.md
+Add report export:
+- reports/retrieval_eval.json
+- reports/retrieval_eval.md
+- script support to save timestamped outputs
+- docs update for reading reports
 
 Expected behavior:
-- A script can run keyword retrieval against golden questions.
-- It prints Hit@k, Recall@k, Precision@k, MRR, and latency.
-- Results can be used as the baseline before vector/hybrid/rerank phases.
+- Evaluation can be re-run and saved as files.
+- Reports are easy to compare across strategy changes.

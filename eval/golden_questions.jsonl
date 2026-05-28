@@ -1,0 +1,2 @@
+{"question":"What does the workspace document say about FastAPI?", "workspace_id":"ws_7b0097a3d324", "top_k":3, "expected_chunk_ids":["doc_97e3f4663a34_chunk_000"], "notes":"Update this case if your workspace or chunk ids change."}
+{"question":"What is the current project phase in this workspace?", "workspace_id":"ws_edc66bf3ec77", "top_k":3, "expected_chunk_ids":["doc_4a1e2a455cd1_chunk_000"], "notes":"This is another example case tied to local workspace data."}
