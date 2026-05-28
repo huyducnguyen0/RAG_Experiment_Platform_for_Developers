@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Save,
   Search,
+  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -44,12 +45,14 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
   const [question, setQuestion] = useState('What does this workspace say about RAG?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
+  const [summary, setSummary] = useState<ResearchQueryResponse | null>(null)
   const [notice, setNotice] = useState('')
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
   const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
+  const [isSummarizing, setIsSummarizing] = useState(false)
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
@@ -95,6 +98,7 @@ function App() {
     setSelectedDocumentId('')
     setSelectedDocument(null)
     setAnswer(null)
+    setSummary(null)
 
     if (!workspaceId) {
       setDocuments([])
@@ -242,6 +246,37 @@ function App() {
     }
   }
 
+  async function handleSummarizeWorkspace() {
+    if (!selectedWorkspaceId) {
+      setNotice('Create or select a workspace first')
+      return
+    }
+
+    setIsSummarizing(true)
+    setNotice('')
+    try {
+      const result = await queryWorkspaceResearch(selectedWorkspaceId, {
+        question: 'Summarize the key points in this workspace.',
+        top_k: 5,
+      })
+      setSummary(result)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsSummarizing(false)
+    }
+  }
+
+  function closeWorkspace() {
+    setSelectedWorkspaceId('')
+    setSelectedWorkspaceName('')
+    setSelectedDocumentId('')
+    setSelectedDocument(null)
+    setDocuments([])
+    setAnswer(null)
+    setSummary(null)
+  }
+
   useEffect(() => {
     let isMounted = true
 
@@ -269,34 +304,10 @@ function App() {
             return
           }
           setWorkspaces([workspace])
-          setSelectedWorkspaceId(workspace.id)
-          setSelectedWorkspaceName(workspace.name)
-          setDocuments([])
           return
         }
 
         setWorkspaces(items)
-        const workspaceId = items[0].id
-        setSelectedWorkspaceId(workspaceId)
-        setSelectedWorkspaceName(items[0].name)
-
-        const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
-        if (!isMounted) {
-          return
-        }
-
-        setDocuments(workspaceDocuments)
-        const firstDocumentId = workspaceDocuments[0]?.id
-
-        if (!firstDocumentId) {
-          return
-        }
-
-        setSelectedDocumentId(firstDocumentId)
-        const detail = await fetchWorkspaceDocument(workspaceId, firstDocumentId)
-        if (isMounted) {
-          setSelectedDocument(detail)
-        }
       })
       .catch((error) => {
         if (isMounted) {
@@ -330,58 +341,40 @@ function App() {
         </div>
       )}
 
-      <section className="workspace">
-        <aside className="sidebar" aria-label="Workspace and document controls">
+      {!selectedWorkspaceId ? (
+        <WorkspaceLobby
+          workspaceName={workspaceName}
+          workspaces={workspaces}
+          isCreatingWorkspace={isCreatingWorkspace}
+          onWorkspaceNameChange={setWorkspaceName}
+          onCreateWorkspace={handleCreateWorkspace}
+          onSelectWorkspace={selectWorkspace}
+        />
+      ) : (
+        <section className="workspace">
+          <aside className="sidebar" aria-label="Workspace and document controls">
           <section className="panel workspace-panel">
-            <div className="panel-heading">
-              <Folder size={18} aria-hidden="true" />
-              <h2>Workspaces</h2>
-            </div>
-            <div className="create-row">
-              <input
-                value={workspaceName}
-                onChange={(event) => setWorkspaceName(event.target.value)}
-                placeholder="Workspace name"
-              />
-              <button
-                className="icon-button"
-                type="button"
-                onClick={handleCreateWorkspace}
-                title="Create workspace"
-              >
-                {isCreatingWorkspace ? (
-                  <Loader2 className="spin" size={17} aria-hidden="true" />
-                ) : (
-                  <Plus size={17} aria-hidden="true" />
-                )}
+            <div className="panel-heading with-action">
+              <div>
+                <Folder size={18} aria-hidden="true" />
+                <h2>{selectedWorkspace?.name ?? 'Workspace'}</h2>
+              </div>
+              <button className="secondary-button" type="button" onClick={closeWorkspace}>
+                All workspaces
               </button>
             </div>
-            <div className="workspace-list">
-              {workspaces.map((workspace) => (
-                <button
-                  key={workspace.id}
-                  className={`workspace-item ${workspace.id === selectedWorkspaceId ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => selectWorkspace(workspace.id)}
-                >
-                  <span>{workspace.name}</span>
-                  <small>{workspace.document_count} documents</small>
-                </button>
-              ))}
-            </div>
-            <div className="rename-row">
+            <div className="rename-row compact">
               <input
                 value={selectedWorkspaceName}
                 onChange={(event) => setSelectedWorkspaceName(event.target.value)}
                 placeholder="Selected workspace name"
-                disabled={!selectedWorkspaceId}
               />
               <button
                 className="icon-button"
                 type="button"
                 onClick={handleRenameWorkspace}
                 title="Rename selected workspace"
-                disabled={!selectedWorkspaceId || isRenamingWorkspace}
+                disabled={isRenamingWorkspace}
               >
                 {isRenamingWorkspace ? (
                   <Loader2 className="spin" size={17} aria-hidden="true" />
@@ -487,9 +480,24 @@ function App() {
           </section>
 
           <section className="panel research-panel">
-            <div className="panel-heading">
-              <Search size={18} aria-hidden="true" />
-              <h2>Workspace Query</h2>
+            <div className="panel-heading with-action">
+              <div>
+                <Search size={18} aria-hidden="true" />
+                <h2>Workspace Chat</h2>
+              </div>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={handleSummarizeWorkspace}
+                disabled={isSummarizing}
+              >
+                {isSummarizing ? (
+                  <Loader2 className="spin" size={16} aria-hidden="true" />
+                ) : (
+                  <Sparkles size={16} aria-hidden="true" />
+                )}
+                Summarize
+              </button>
             </div>
             <div className="query-row">
               <textarea
@@ -513,10 +521,86 @@ function App() {
                 <SourceList answer={answer} />
               </div>
             )}
+            {summary && (
+              <div className="answer-layout summary-layout">
+                <section className="answer-box">
+                  <div className="answer-meta">workspace summary</div>
+                  <p>{summary.answer}</p>
+                </section>
+                <SourceList answer={summary} />
+              </div>
+            )}
           </section>
         </section>
       </section>
+      )}
     </main>
+  )
+}
+
+function WorkspaceLobby({
+  workspaceName,
+  workspaces,
+  isCreatingWorkspace,
+  onWorkspaceNameChange,
+  onCreateWorkspace,
+  onSelectWorkspace,
+}: {
+  workspaceName: string
+  workspaces: WorkspaceSummary[]
+  isCreatingWorkspace: boolean
+  onWorkspaceNameChange: (value: string) => void
+  onCreateWorkspace: () => void
+  onSelectWorkspace: (workspaceId: string) => void
+}) {
+  return (
+    <section className="workspace-lobby">
+      <section className="panel lobby-create-panel">
+        <div className="panel-heading">
+          <Plus size={18} aria-hidden="true" />
+          <h2>Create Workspace</h2>
+        </div>
+        <div className="create-row large">
+          <input
+            value={workspaceName}
+            onChange={(event) => onWorkspaceNameChange(event.target.value)}
+            placeholder="Workspace name"
+          />
+          <button className="primary-button" type="button" onClick={onCreateWorkspace}>
+            {isCreatingWorkspace ? (
+              <Loader2 className="spin" size={17} aria-hidden="true" />
+            ) : (
+              <Plus size={17} aria-hidden="true" />
+            )}
+            Create
+          </button>
+        </div>
+      </section>
+
+      <section className="panel lobby-list-panel">
+        <div className="panel-heading">
+          <Folder size={18} aria-hidden="true" />
+          <h2>Current Workspaces</h2>
+        </div>
+        {workspaces.length === 0 ? (
+          <p className="muted">No workspaces yet.</p>
+        ) : (
+          <div className="workspace-grid">
+            {workspaces.map((workspace) => (
+              <button
+                key={workspace.id}
+                className="workspace-card"
+                type="button"
+                onClick={() => onSelectWorkspace(workspace.id)}
+              >
+                <span>{workspace.name}</span>
+                <small>{workspace.document_count} documents</small>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </section>
   )
 }
 
