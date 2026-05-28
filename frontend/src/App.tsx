@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Activity,
   AlertCircle,
-  Database,
+  Beaker,
   FileText,
-  Folder,
+  FolderOpen,
   Loader2,
+  MessageSquare,
   Plus,
   RefreshCcw,
-  Save,
   Search,
   Sparkles,
   Trash2,
@@ -18,52 +18,55 @@ import {
   createWorkspace,
   deleteWorkspace,
   deleteWorkspaceDocument,
+  deleteWorkspaceEvalQuestion,
   fetchHealth,
   fetchWorkspaceDocument,
   listWorkspaceDocuments,
+  listWorkspaceEvalQuestions,
   listWorkspaces,
   queryWorkspaceResearch,
-  renameWorkspace,
   uploadWorkspaceDocument,
+  uploadWorkspaceEvalQuestions,
 } from './api/client'
 import type {
   DocumentDetail,
   DocumentSummary,
+  EvalQuestion,
   ResearchQueryResponse,
   WorkspaceSummary,
 } from './types/api'
 
 type HealthState = 'checking' | 'online' | 'offline'
+type WorkspaceTab = 'documents' | 'golden' | 'experiments' | 'reports' | 'playground'
 
 function App() {
   const [health, setHealth] = useState<HealthState>('checking')
+  const [notice, setNotice] = useState('')
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('documents')
+
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [workspaceName, setWorkspaceName] = useState('New RAG Experiment')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('')
-  const [workspaceName, setWorkspaceName] = useState('New research workspace')
-  const [selectedWorkspaceName, setSelectedWorkspaceName] = useState('')
+
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [selectedDocumentId, setSelectedDocumentId] = useState('')
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
-  const [question, setQuestion] = useState('What does this workspace say about RAG?')
+
+  const [evalQuestions, setEvalQuestions] = useState<EvalQuestion[]>([])
+  const [question, setQuestion] = useState('What does this workspace say about FastAPI?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
-  const [summary, setSummary] = useState<ResearchQueryResponse | null>(null)
-  const [notice, setNotice] = useState('')
+
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
-  const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false)
   const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false)
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false)
+  const [isUploadingEval, setIsUploadingEval] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
-  const [isSummarizing, setIsSummarizing] = useState(false)
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [workspaces, selectedWorkspaceId],
-  )
-
-  const selectedDocumentSummary = useMemo(
-    () => documents.find((document) => document.id === selectedDocumentId),
-    [documents, selectedDocumentId],
   )
 
   async function refreshHealth() {
@@ -81,47 +84,56 @@ function App() {
     setWorkspaces(items)
 
     if (nextWorkspaceId) {
-      await selectWorkspace(nextWorkspaceId)
-      return
-    }
-
-    if (!selectedWorkspaceId && items.length > 0) {
-      await selectWorkspace(items[0].id)
+      await selectWorkspace(nextWorkspaceId, items)
       return
     }
 
     if (selectedWorkspaceId && !items.some((item) => item.id === selectedWorkspaceId)) {
-      await selectWorkspace(items[0]?.id ?? '')
+      closeWorkspace()
     }
   }
 
-  async function selectWorkspace(workspaceId: string) {
+  async function selectWorkspace(workspaceId: string, cached?: WorkspaceSummary[]) {
     setSelectedWorkspaceId(workspaceId)
-    setSelectedDocumentId('')
-    setSelectedDocument(null)
+    setActiveTab('documents')
     setAnswer(null)
-    setSummary(null)
 
     if (!workspaceId) {
       setDocuments([])
-      setSelectedWorkspaceName('')
+      setEvalQuestions([])
+      setSelectedDocumentId('')
+      setSelectedDocument(null)
       return
     }
 
-    const workspace = workspaces.find((item) => item.id === workspaceId)
-    setSelectedWorkspaceName(workspace?.name ?? '')
+    setIsLoadingWorkspace(true)
+    try {
+      const [workspaceDocuments, workspaceEval] = await Promise.all([
+        listWorkspaceDocuments(workspaceId),
+        listWorkspaceEvalQuestions(workspaceId),
+      ])
+      setDocuments(workspaceDocuments)
+      setEvalQuestions(workspaceEval.items)
+      if (workspaceDocuments.length > 0) {
+        await selectDocument(workspaceId, workspaceDocuments[0].id)
+      } else {
+        setSelectedDocumentId('')
+        setSelectedDocument(null)
+      }
 
-    const workspaceDocuments = await listWorkspaceDocuments(workspaceId)
-    setDocuments(workspaceDocuments)
-
-    if (workspaceDocuments.length > 0) {
-      await selectDocument(workspaceId, workspaceDocuments[0].id)
+      if (!cached) {
+        const refreshed = await listWorkspaces()
+        setWorkspaces(refreshed)
+      }
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsLoadingWorkspace(false)
     }
   }
 
   async function selectDocument(workspaceId: string, documentId: string) {
     setSelectedDocumentId(documentId)
-
     if (!workspaceId || !documentId) {
       setSelectedDocument(null)
       return
@@ -141,44 +153,15 @@ function App() {
   async function handleCreateWorkspace() {
     setIsCreatingWorkspace(true)
     setNotice('')
-
     try {
-      const workspace = await createWorkspace(workspaceName)
-      setWorkspaceName('New research workspace')
-      setSelectedWorkspaceName(workspace.name)
-      await refreshWorkspaces(workspace.id)
-      setNotice(`Created workspace ${workspace.name}`)
+      const created = await createWorkspace(workspaceName)
+      setWorkspaceName('New RAG Experiment')
+      await refreshWorkspaces(created.id)
+      setNotice(`Created workspace ${created.name}`)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
       setIsCreatingWorkspace(false)
-    }
-  }
-
-  async function handleRenameWorkspace() {
-    if (!selectedWorkspaceId) {
-      setNotice('Select a workspace first')
-      return
-    }
-
-    setIsRenamingWorkspace(true)
-    setNotice('')
-
-    try {
-      const renamed = await renameWorkspace(selectedWorkspaceId, selectedWorkspaceName)
-      setWorkspaces((items) =>
-        items.map((item) =>
-          item.id === renamed.id
-            ? { ...item, name: renamed.name }
-            : item,
-        ),
-      )
-      setSelectedWorkspaceName(renamed.name)
-      setNotice(`Renamed workspace to ${renamed.name}`)
-    } catch (error) {
-      setNotice(getErrorMessage(error))
-    } finally {
-      setIsRenamingWorkspace(false)
     }
   }
 
@@ -187,23 +170,17 @@ function App() {
       return
     }
 
-    const workspaceLabel = selectedWorkspace?.name ?? selectedWorkspaceName
-    const confirmed = window.confirm(
-      `Delete workspace "${workspaceLabel}" and all documents inside it?`,
-    )
-
-    if (!confirmed) {
+    const workspaceLabel = selectedWorkspace?.name ?? selectedWorkspaceId
+    if (!window.confirm(`Delete workspace "${workspaceLabel}" and all data inside it?`)) {
       return
     }
 
     setIsDeletingWorkspace(true)
     setNotice('')
-
     try {
       await deleteWorkspace(selectedWorkspaceId)
       closeWorkspace()
-      const items = await listWorkspaces()
-      setWorkspaces(items)
+      await refreshWorkspaces()
       setNotice(`Deleted workspace ${workspaceLabel}`)
     } catch (error) {
       setNotice(getErrorMessage(error))
@@ -212,13 +189,12 @@ function App() {
     }
   }
 
-  async function handleUpload(file: File) {
+  async function handleUploadDocument(file: File) {
     if (!selectedWorkspaceId) {
-      setNotice('Create or select a workspace first')
       return
     }
 
-    setIsUploading(true)
+    setIsUploadingDocument(true)
     setNotice('')
     try {
       const uploaded = await uploadWorkspaceDocument(selectedWorkspaceId, file)
@@ -226,12 +202,12 @@ function App() {
       setDocuments(workspaceDocuments)
       setSelectedDocumentId(uploaded.id)
       setSelectedDocument(uploaded)
-      setNotice(`Uploaded ${uploaded.file_name}`)
       await refreshWorkspaces(selectedWorkspaceId)
+      setNotice(`Uploaded ${uploaded.file_name}`)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
-      setIsUploading(false)
+      setIsUploadingDocument(false)
     }
   }
 
@@ -245,10 +221,11 @@ function App() {
       await deleteWorkspaceDocument(selectedWorkspaceId, documentId)
       const workspaceDocuments = await listWorkspaceDocuments(selectedWorkspaceId)
       setDocuments(workspaceDocuments)
-      setSelectedDocumentId('')
-      setSelectedDocument(null)
       if (workspaceDocuments.length > 0) {
         await selectDocument(selectedWorkspaceId, workspaceDocuments[0].id)
+      } else {
+        setSelectedDocumentId('')
+        setSelectedDocument(null)
       }
       await refreshWorkspaces(selectedWorkspaceId)
       setNotice('Document deleted')
@@ -257,9 +234,43 @@ function App() {
     }
   }
 
-  async function handleResearchQuery() {
+  async function handleUploadEval(file: File) {
     if (!selectedWorkspaceId) {
-      setNotice('Create or select a workspace first')
+      return
+    }
+
+    setIsUploadingEval(true)
+    setNotice('')
+    try {
+      const result = await uploadWorkspaceEvalQuestions(selectedWorkspaceId, file)
+      const latest = await listWorkspaceEvalQuestions(selectedWorkspaceId)
+      setEvalQuestions(latest.items)
+      setNotice(`Imported ${result.imported} golden questions`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsUploadingEval(false)
+    }
+  }
+
+  async function handleDeleteEvalQuestion(questionId: string) {
+    if (!selectedWorkspaceId) {
+      return
+    }
+
+    setNotice('')
+    try {
+      await deleteWorkspaceEvalQuestion(selectedWorkspaceId, questionId)
+      const latest = await listWorkspaceEvalQuestions(selectedWorkspaceId)
+      setEvalQuestions(latest.items)
+      setNotice('Golden question deleted')
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    }
+  }
+
+  async function handleQuery() {
+    if (!selectedWorkspaceId) {
       return
     }
 
@@ -278,67 +289,26 @@ function App() {
     }
   }
 
-  async function handleSummarizeWorkspace() {
-    if (!selectedWorkspaceId) {
-      setNotice('Create or select a workspace first')
-      return
-    }
-
-    setIsSummarizing(true)
-    setNotice('')
-    try {
-      const result = await queryWorkspaceResearch(selectedWorkspaceId, {
-        question: 'Summarize the key points in this workspace.',
-        top_k: 5,
-      })
-      setSummary(result)
-    } catch (error) {
-      setNotice(getErrorMessage(error))
-    } finally {
-      setIsSummarizing(false)
-    }
-  }
-
   function closeWorkspace() {
     setSelectedWorkspaceId('')
-    setSelectedWorkspaceName('')
+    setDocuments([])
+    setEvalQuestions([])
     setSelectedDocumentId('')
     setSelectedDocument(null)
-    setDocuments([])
     setAnswer(null)
-    setSummary(null)
+    setActiveTab('documents')
   }
 
   useEffect(() => {
     let isMounted = true
 
-    fetchHealth()
-      .then(() => {
-        if (isMounted) {
-          setHealth('online')
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setHealth('offline')
-        }
-      })
+    refreshHealth()
 
     listWorkspaces()
-      .then(async (items) => {
+      .then((items) => {
         if (!isMounted) {
           return
         }
-
-        if (items.length === 0) {
-          const workspace = await createWorkspace('My Research Workspace')
-          if (!isMounted) {
-            return
-          }
-          setWorkspaces([workspace])
-          return
-        }
-
         setWorkspaces(items)
       })
       .catch((error) => {
@@ -353,28 +323,28 @@ function App() {
   }, [])
 
   return (
-    <main className="app-shell">
+    <main className="shell">
       <header className="topbar">
         <div>
           <p className="eyebrow">Agentic Research OS</p>
-          <h1>Notebook Workspace</h1>
+          <h1>RAG Experiment Platform</h1>
         </div>
-        <button className="status-button" type="button" onClick={refreshHealth}>
-          <Activity size={18} aria-hidden="true" />
-          <span className={`status-dot ${health}`}></span>
+        <button className="status-btn" type="button" onClick={refreshHealth}>
+          <Activity size={16} />
+          <span className={`dot ${health}`} />
           {health === 'checking' ? 'Checking' : health === 'online' ? 'Backend online' : 'Backend offline'}
         </button>
       </header>
 
       {notice && (
         <div className="notice" role="status">
-          <AlertCircle size={18} aria-hidden="true" />
+          <AlertCircle size={16} />
           <span>{notice}</span>
         </div>
       )}
 
       {!selectedWorkspaceId ? (
-        <WorkspaceLobby
+        <WorkspaceHome
           workspaceName={workspaceName}
           workspaces={workspaces}
           isCreatingWorkspace={isCreatingWorkspace}
@@ -383,209 +353,130 @@ function App() {
           onSelectWorkspace={selectWorkspace}
         />
       ) : (
-        <section className="workspace">
-          <aside className="sidebar" aria-label="Workspace and document controls">
-          <section className="panel workspace-panel">
-            <div className="panel-heading with-action">
-              <div>
-                <Folder size={18} aria-hidden="true" />
+        <section className="workspace-layout">
+          <aside className="left-panel">
+            <section className="card">
+              <div className="card-title">
+                <FolderOpen size={17} />
                 <h2>{selectedWorkspace?.name ?? 'Workspace'}</h2>
               </div>
-              <div className="button-row">
-                <button className="secondary-button" type="button" onClick={closeWorkspace}>
+              <p className="meta">{selectedWorkspaceId}</p>
+              <div className="count-grid">
+                <Stat label="Documents" value={String(documents.length)} />
+                <Stat label="Golden Qs" value={String(evalQuestions.length)} />
+              </div>
+              <div className="row-buttons">
+                <button className="btn secondary" type="button" onClick={closeWorkspace}>
                   All workspaces
                 </button>
                 <button
-                  className="danger-button"
+                  className="btn danger"
                   type="button"
                   onClick={handleDeleteWorkspace}
                   disabled={isDeletingWorkspace}
                 >
-                  {isDeletingWorkspace ? (
-                    <Loader2 className="spin" size={16} aria-hidden="true" />
-                  ) : (
-                    <Trash2 size={16} aria-hidden="true" />
-                  )}
+                  {isDeletingWorkspace ? <Loader2 className="spin" size={15} /> : <Trash2 size={15} />}
                   Delete
                 </button>
               </div>
-            </div>
-            <div className="rename-row compact">
-              <input
-                value={selectedWorkspaceName}
-                onChange={(event) => setSelectedWorkspaceName(event.target.value)}
-                placeholder="Selected workspace name"
-              />
-              <button
-                className="icon-button"
-                type="button"
-                onClick={handleRenameWorkspace}
-                title="Rename selected workspace"
-                disabled={isRenamingWorkspace}
-              >
-                {isRenamingWorkspace ? (
-                  <Loader2 className="spin" size={17} aria-hidden="true" />
-                ) : (
-                  <Save size={17} aria-hidden="true" />
-                )}
-              </button>
-            </div>
-          </section>
+            </section>
 
-          <section className="panel upload-panel">
-            <div className="panel-heading">
-              <Upload size={18} aria-hidden="true" />
-              <h2>Upload to Workspace</h2>
-            </div>
-            <label className="upload-zone">
-              <input
-                type="file"
-                accept=".txt,.md"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (file) {
-                    handleUpload(file)
-                    event.target.value = ''
-                  }
-                }}
-              />
-              {isUploading ? (
-                <Loader2 className="spin" size={22} aria-hidden="true" />
-              ) : (
-                <FileText size={22} aria-hidden="true" />
-              )}
-              <span>{isUploading ? 'Uploading...' : 'Choose .txt or .md'}</span>
-            </label>
-          </section>
-
-          <section className="panel document-panel">
-            <div className="panel-heading with-action">
-              <div>
-                <Database size={18} aria-hidden="true" />
-                <h2>Documents</h2>
+            <section className="card">
+              <div className="card-title">
+                <RefreshCcw size={17} />
+                <h2>Quick Actions</h2>
               </div>
               <button
-                className="icon-button"
+                className="btn secondary full"
                 type="button"
-                onClick={() => selectedWorkspaceId && selectWorkspace(selectedWorkspaceId)}
-                title="Refresh documents"
+                onClick={() => selectWorkspace(selectedWorkspaceId)}
               >
-                <RefreshCcw size={17} aria-hidden="true" />
+                Refresh workspace data
               </button>
-            </div>
-            <div className="document-list">
-              {documents.length === 0 ? (
-                <p className="muted">No documents in this workspace yet.</p>
-              ) : (
-                documents.map((document) => (
-                  <button
-                    key={document.id}
-                    className={`document-item ${document.id === selectedDocumentId ? 'active' : ''}`}
-                    type="button"
-                    onClick={() => selectDocument(selectedWorkspaceId, document.id)}
-                  >
-                    <span className="document-title">{document.title}</span>
-                    <span className="document-meta">
-                      {document.file_type.toUpperCase()} | {document.chunk_count} chunks | {document.content_length} chars
-                    </span>
-                  </button>
-                ))
+              {isLoadingWorkspace && (
+                <p className="meta inline">
+                  <Loader2 className="spin" size={14} /> Syncing...
+                </p>
               )}
-            </div>
-          </section>
-        </aside>
+            </section>
+          </aside>
 
-        <section className="content-area">
-          <section className="panel detail-panel">
-            <div className="panel-heading with-action">
-              <div>
-                <FileText size={18} aria-hidden="true" />
-                <h2>{selectedDocumentSummary?.title ?? selectedWorkspace?.name ?? 'Workspace Detail'}</h2>
-              </div>
-              {selectedDocument && (
-                <button
-                  className="danger-button"
-                  type="button"
-                  onClick={() => handleDeleteDocument(selectedDocument.id)}
-                >
-                  <Trash2 size={16} aria-hidden="true" />
-                  Delete
-                </button>
-              )}
-            </div>
+          <section className="main-panel">
+            <nav className="tabs" aria-label="Workspace tabs">
+              <TabButton
+                isActive={activeTab === 'documents'}
+                onClick={() => setActiveTab('documents')}
+                icon={<FileText size={15} />}
+                label="Documents"
+              />
+              <TabButton
+                isActive={activeTab === 'golden'}
+                onClick={() => setActiveTab('golden')}
+                icon={<Beaker size={15} />}
+                label="Golden Questions"
+              />
+              <TabButton
+                isActive={activeTab === 'experiments'}
+                onClick={() => setActiveTab('experiments')}
+                icon={<Sparkles size={15} />}
+                label="Experiments"
+              />
+              <TabButton
+                isActive={activeTab === 'reports'}
+                onClick={() => setActiveTab('reports')}
+                icon={<FileText size={15} />}
+                label="Reports"
+              />
+              <TabButton
+                isActive={activeTab === 'playground'}
+                onClick={() => setActiveTab('playground')}
+                icon={<MessageSquare size={15} />}
+                label="Playground"
+              />
+            </nav>
 
-            {isLoadingDocument ? (
-              <div className="loading-line">
-                <Loader2 className="spin" size={18} aria-hidden="true" />
-                Loading document
-              </div>
-            ) : selectedDocument ? (
-              <DocumentDetailView document={selectedDocument} />
-            ) : (
-              <p className="muted">Upload a document to the selected workspace to inspect content and chunks.</p>
+            {activeTab === 'documents' && (
+              <DocumentsTab
+                documents={documents}
+                selectedDocument={selectedDocument}
+                selectedDocumentId={selectedDocumentId}
+                isLoadingDocument={isLoadingDocument}
+                isUploadingDocument={isUploadingDocument}
+                onSelectDocument={(documentId) => selectDocument(selectedWorkspaceId, documentId)}
+                onUploadDocument={handleUploadDocument}
+                onDeleteDocument={handleDeleteDocument}
+              />
             )}
-          </section>
 
-          <section className="panel research-panel">
-            <div className="panel-heading with-action">
-              <div>
-                <Search size={18} aria-hidden="true" />
-                <h2>Workspace Chat</h2>
-              </div>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={handleSummarizeWorkspace}
-                disabled={isSummarizing}
-              >
-                {isSummarizing ? (
-                  <Loader2 className="spin" size={16} aria-hidden="true" />
-                ) : (
-                  <Sparkles size={16} aria-hidden="true" />
-                )}
-                Summarize
-              </button>
-            </div>
-            <div className="query-row">
-              <textarea
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                rows={3}
-                placeholder="Ask about documents in the selected workspace"
+            {activeTab === 'golden' && (
+              <GoldenTab
+                evalQuestions={evalQuestions}
+                isUploadingEval={isUploadingEval}
+                onUploadEval={handleUploadEval}
+                onDeleteEvalQuestion={handleDeleteEvalQuestion}
               />
-              <button className="primary-button" type="button" onClick={handleResearchQuery} disabled={isQuerying}>
-                {isQuerying ? <Loader2 className="spin" size={17} aria-hidden="true" /> : <Search size={17} aria-hidden="true" />}
-                Ask
-              </button>
-            </div>
-
-            {answer && (
-              <div className="answer-layout">
-                <section className="answer-box">
-                  <div className="answer-meta">{answer.mode}</div>
-                  <p>{answer.answer}</p>
-                </section>
-                <SourceList answer={answer} />
-              </div>
             )}
-            {summary && (
-              <div className="answer-layout summary-layout">
-                <section className="answer-box">
-                  <div className="answer-meta">workspace summary</div>
-                  <p>{summary.answer}</p>
-                </section>
-                <SourceList answer={summary} />
-              </div>
+
+            {activeTab === 'experiments' && <ComingSoon title="Experiments" />}
+            {activeTab === 'reports' && <ComingSoon title="Reports" />}
+
+            {activeTab === 'playground' && (
+              <PlaygroundTab
+                question={question}
+                answer={answer}
+                isQuerying={isQuerying}
+                onQuestionChange={setQuestion}
+                onQuery={handleQuery}
+              />
             )}
           </section>
         </section>
-      </section>
       )}
     </main>
   )
 }
 
-function WorkspaceLobby({
+function WorkspaceHome({
   workspaceName,
   workspaces,
   isCreatingWorkspace,
@@ -601,47 +492,43 @@ function WorkspaceLobby({
   onSelectWorkspace: (workspaceId: string) => void
 }) {
   return (
-    <section className="workspace-lobby">
-      <section className="panel lobby-create-panel">
-        <div className="panel-heading">
-          <Plus size={18} aria-hidden="true" />
+    <section className="home-grid">
+      <section className="card">
+        <div className="card-title">
+          <Plus size={17} />
           <h2>Create Workspace</h2>
         </div>
-        <div className="create-row large">
+        <div className="inline-form">
           <input
             value={workspaceName}
             onChange={(event) => onWorkspaceNameChange(event.target.value)}
             placeholder="Workspace name"
           />
-          <button className="primary-button" type="button" onClick={onCreateWorkspace}>
-            {isCreatingWorkspace ? (
-              <Loader2 className="spin" size={17} aria-hidden="true" />
-            ) : (
-              <Plus size={17} aria-hidden="true" />
-            )}
+          <button className="btn primary" type="button" onClick={onCreateWorkspace}>
+            {isCreatingWorkspace ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}
             Create
           </button>
         </div>
       </section>
 
-      <section className="panel lobby-list-panel">
-        <div className="panel-heading">
-          <Folder size={18} aria-hidden="true" />
+      <section className="card">
+        <div className="card-title">
+          <FolderOpen size={17} />
           <h2>Current Workspaces</h2>
         </div>
         {workspaces.length === 0 ? (
-          <p className="muted">No workspaces yet.</p>
+          <p className="meta">No workspaces yet.</p>
         ) : (
           <div className="workspace-grid">
             {workspaces.map((workspace) => (
               <button
                 key={workspace.id}
-                className="workspace-card"
+                className="workspace-item"
                 type="button"
                 onClick={() => onSelectWorkspace(workspace.id)}
               >
-                <span>{workspace.name}</span>
-                <small>{workspace.document_count} documents</small>
+                <strong>{workspace.name}</strong>
+                <span>{workspace.document_count} documents</span>
               </button>
             ))}
           </div>
@@ -651,48 +538,256 @@ function WorkspaceLobby({
   )
 }
 
-function DocumentDetailView({ document }: { document: DocumentDetail }) {
+function DocumentsTab({
+  documents,
+  selectedDocument,
+  selectedDocumentId,
+  isLoadingDocument,
+  isUploadingDocument,
+  onSelectDocument,
+  onUploadDocument,
+  onDeleteDocument,
+}: {
+  documents: DocumentSummary[]
+  selectedDocument: DocumentDetail | null
+  selectedDocumentId: string
+  isLoadingDocument: boolean
+  isUploadingDocument: boolean
+  onSelectDocument: (documentId: string) => void
+  onUploadDocument: (file: File) => void
+  onDeleteDocument: (documentId: string) => void
+}) {
   return (
-    <div className="document-detail">
-      <div className="stats-grid">
-        <Stat label="Type" value={document.file_type.toUpperCase()} />
-        <Stat label="Characters" value={String(document.content_length)} />
-        <Stat label="Chunks" value={String(document.chunk_count)} />
-      </div>
-      <pre className="content-preview">{document.content}</pre>
-      <div className="chunk-list">
-        {document.chunks.map((chunk) => (
-          <article className="chunk-item" key={chunk.chunk_id}>
-            <div className="chunk-header">
-              <span>{chunk.chunk_id}</span>
-              <span>{chunk.start_index}-{chunk.end_index}</span>
+    <section className="tab-layout">
+      <section className="card">
+        <div className="card-title">
+          <Upload size={17} />
+          <h2>Upload Documents</h2>
+        </div>
+        <label className="upload">
+          <input
+            type="file"
+            accept=".txt,.md"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) {
+                onUploadDocument(file)
+                event.target.value = ''
+              }
+            }}
+          />
+          {isUploadingDocument ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
+          {isUploadingDocument ? 'Uploading...' : 'Select .txt / .md'}
+        </label>
+      </section>
+
+      <section className="card">
+        <div className="card-title">
+          <FileText size={17} />
+          <h2>Documents</h2>
+        </div>
+        {documents.length === 0 ? (
+          <p className="meta">No documents yet.</p>
+        ) : (
+          <div className="list">
+            {documents.map((document) => (
+              <button
+                className={`list-item ${document.id === selectedDocumentId ? 'active' : ''}`}
+                type="button"
+                key={document.id}
+                onClick={() => onSelectDocument(document.id)}
+              >
+                <strong>{document.title}</strong>
+                <span>
+                  {document.file_type.toUpperCase()} | {document.chunk_count} chunks
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-title">
+          <Search size={17} />
+          <h2>Document Detail</h2>
+        </div>
+        {isLoadingDocument ? (
+          <p className="meta inline">
+            <Loader2 className="spin" size={14} /> Loading document...
+          </p>
+        ) : selectedDocument ? (
+          <>
+            <div className="row-between">
+              <p className="meta">{selectedDocument.file_name}</p>
+              <button className="btn danger" type="button" onClick={() => onDeleteDocument(selectedDocument.id)}>
+                <Trash2 size={15} />
+                Delete
+              </button>
             </div>
-            <p>{chunk.content}</p>
-          </article>
-        ))}
-      </div>
-    </div>
+            <div className="count-grid">
+              <Stat label="Chars" value={String(selectedDocument.content_length)} />
+              <Stat label="Chunks" value={String(selectedDocument.chunk_count)} />
+              <Stat label="Type" value={selectedDocument.file_type.toUpperCase()} />
+            </div>
+            <pre className="preview">{selectedDocument.content}</pre>
+          </>
+        ) : (
+          <p className="meta">Select a document to inspect details.</p>
+        )}
+      </section>
+    </section>
   )
 }
 
-function SourceList({ answer }: { answer: ResearchQueryResponse }) {
-  if (answer.sources.length === 0) {
-    return <p className="muted">No sources returned from this workspace.</p>
-  }
-
+function GoldenTab({
+  evalQuestions,
+  isUploadingEval,
+  onUploadEval,
+  onDeleteEvalQuestion,
+}: {
+  evalQuestions: EvalQuestion[]
+  isUploadingEval: boolean
+  onUploadEval: (file: File) => void
+  onDeleteEvalQuestion: (questionId: string) => void
+}) {
   return (
-    <section className="source-list" aria-label="Research sources">
-      {answer.sources.map((source) => (
-        <article className="source-item" key={source.chunk_id}>
-          <div className="source-header">
-            <span>{source.document_title}</span>
-            <strong>score {source.score}</strong>
+    <section className="tab-layout">
+      <section className="card">
+        <div className="card-title">
+          <Upload size={17} />
+          <h2>Upload Golden Questions</h2>
+        </div>
+        <label className="upload">
+          <input
+            type="file"
+            accept=".jsonl"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) {
+                onUploadEval(file)
+                event.target.value = ''
+              }
+            }}
+          />
+          {isUploadingEval ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
+          {isUploadingEval ? 'Importing...' : 'Select golden_questions.jsonl'}
+        </label>
+      </section>
+
+      <section className="card">
+        <div className="card-title">
+          <Beaker size={17} />
+          <h2>Golden Questions</h2>
+        </div>
+        {evalQuestions.length === 0 ? (
+          <p className="meta">No golden questions yet.</p>
+        ) : (
+          <div className="qa-list">
+            {evalQuestions.map((item) => (
+              <article className="qa-item" key={item.id}>
+                <div className="row-between">
+                  <strong>{item.id}</strong>
+                  <button className="icon-danger" type="button" onClick={() => onDeleteEvalQuestion(item.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <p>{item.question}</p>
+                <p className="meta">top_k={item.top_k} | expected={item.expected_chunk_ids.join(', ') || '(none)'}</p>
+              </article>
+            ))}
           </div>
-          <code>{source.chunk_id}</code>
-          <p>{source.preview}</p>
-        </article>
-      ))}
+        )}
+      </section>
     </section>
+  )
+}
+
+function PlaygroundTab({
+  question,
+  answer,
+  isQuerying,
+  onQuestionChange,
+  onQuery,
+}: {
+  question: string
+  answer: ResearchQueryResponse | null
+  isQuerying: boolean
+  onQuestionChange: (value: string) => void
+  onQuery: () => void
+}) {
+  return (
+    <section className="tab-layout">
+      <section className="card">
+        <div className="card-title">
+          <MessageSquare size={17} />
+          <h2>Workspace Playground</h2>
+        </div>
+        <div className="chat-row">
+          <textarea
+            value={question}
+            onChange={(event) => onQuestionChange(event.target.value)}
+            rows={3}
+            placeholder="Ask from workspace documents..."
+          />
+          <button className="btn primary" type="button" onClick={onQuery} disabled={isQuerying}>
+            {isQuerying ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
+            Ask
+          </button>
+        </div>
+      </section>
+
+      {answer && (
+        <section className="card">
+          <div className="card-title">
+            <Sparkles size={17} />
+            <h2>Answer</h2>
+          </div>
+          <p className="meta">{answer.mode}</p>
+          <p>{answer.answer}</p>
+          <div className="qa-list">
+            {answer.sources.map((source) => (
+              <article className="qa-item" key={source.chunk_id}>
+                <strong>{source.document_title}</strong>
+                <p className="meta">{source.chunk_id} | score {source.score}</p>
+                <p>{source.preview}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </section>
+  )
+}
+
+function ComingSoon({ title }: { title: string }) {
+  return (
+    <section className="card">
+      <div className="card-title">
+        <Sparkles size={17} />
+        <h2>{title}</h2>
+      </div>
+      <p className="meta">This tab is reserved for next phase implementation.</p>
+    </section>
+  )
+}
+
+function TabButton({
+  isActive,
+  onClick,
+  icon,
+  label,
+}: {
+  isActive: boolean
+  onClick: () => void
+  icon: ReactNode
+  label: string
+}) {
+  return (
+    <button className={`tab-btn ${isActive ? 'active' : ''}`} type="button" onClick={onClick}>
+      {icon}
+      {label}
+    </button>
   )
 }
 
@@ -709,7 +804,6 @@ function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message
   }
-
   return 'Something went wrong'
 }
 

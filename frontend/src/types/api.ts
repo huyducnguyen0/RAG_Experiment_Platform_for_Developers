@@ -68,3 +68,28 @@ export type ResearchQueryResponse = {
   sources: ResearchSource[]
   mode: string
 }
+
+export type EvalQuestion = {
+  id: string
+  question: string
+  workspace_id: string
+  expected_chunk_ids: string[]
+  top_k: number
+  notes: string
+}
+
+export type EvalQuestionListResponse = {
+  items: EvalQuestion[]
+  total: number
+}
+
+export type EvalQuestionUploadResponse = {
+  workspace_id: string
+  imported: number
+}
+
+export type DeleteEvalQuestionResponse = {
+  deleted: boolean
+  workspace_id: string
+  question_id: string
+}

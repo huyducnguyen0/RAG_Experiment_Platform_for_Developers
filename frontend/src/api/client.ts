@@ -1,8 +1,11 @@
 import type {
+  DeleteEvalQuestionResponse,
   DeleteDocumentResponse,
   DeleteWorkspaceResponse,
   DocumentDetail,
   DocumentSummary,
+  EvalQuestionListResponse,
+  EvalQuestionUploadResponse,
   HealthResponse,
   ResearchQueryRequest,
   ResearchQueryResponse,
@@ -126,6 +129,34 @@ export async function queryWorkspaceResearch(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  })
+}
+
+export async function uploadWorkspaceEvalQuestions(
+  workspaceId: string,
+  file: File,
+): Promise<EvalQuestionUploadResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request(`/workspaces/${workspaceId}/eval/questions/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function listWorkspaceEvalQuestions(
+  workspaceId: string,
+): Promise<EvalQuestionListResponse> {
+  return request(`/workspaces/${workspaceId}/eval/questions`)
+}
+
+export async function deleteWorkspaceEvalQuestion(
+  workspaceId: string,
+  questionId: string,
+): Promise<DeleteEvalQuestionResponse> {
+  return request(`/workspaces/${workspaceId}/eval/questions/${questionId}`, {
+    method: 'DELETE',
   })
 }
 
