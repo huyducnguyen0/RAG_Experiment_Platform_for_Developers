@@ -222,10 +222,25 @@ h2 {
   min-width: 0;
 }
 
+.workspace-panel .panel-heading.with-action {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.workspace-panel .panel-heading.with-action > div {
+  width: 100%;
+}
+
+.workspace-panel h2 {
+  overflow-wrap: anywhere;
+}
+
 .button-row {
   align-items: center;
-  display: flex;
+  display: grid;
   gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
 }
 
 .upload-zone {
