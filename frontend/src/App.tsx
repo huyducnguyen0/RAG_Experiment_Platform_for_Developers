@@ -326,7 +326,7 @@ function App() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Agentic Research OS</p>
+          <p className="eyebrow">RAG Experiment Platform for Developers</p>
           <h1>RAG Experiment Platform</h1>
         </div>
         <button className="status-btn" type="button" onClick={refreshHealth}>

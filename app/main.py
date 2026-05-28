@@ -7,7 +7,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.research import router as research_router
 from app.api.routes.workspaces import router as workspaces_router
 
-app = FastAPI(title="Agentic Research OS")
+app = FastAPI(title="RAG Experiment Platform for Developers")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,5 +30,5 @@ app.include_router(workspaces_router)
 @app.get("/")
 def root():
     return {
-        "message": "Agentic Research OS is running"
+        "message": "RAG Experiment Platform for Developers is running"
     }
