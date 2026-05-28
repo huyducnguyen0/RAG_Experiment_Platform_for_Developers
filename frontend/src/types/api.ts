@@ -93,3 +93,58 @@ export type DeleteEvalQuestionResponse = {
   workspace_id: string
   question_id: string
 }
+
+export type ExperimentMetrics = {
+  case_count: number
+  hit_count: number
+  hit_at_k: number
+  recall_at_k: number
+  precision_at_k: number
+  mrr: number
+  avg_latency_ms: number
+}
+
+export type ExperimentCaseResult = {
+  question: string
+  workspace_id: string
+  top_k: number
+  expected_chunk_ids: string[]
+  returned_chunk_ids: string[]
+  relevant_count: number
+  hit: boolean
+  recall_at_k: number
+  precision_at_k: number
+  reciprocal_rank: number
+  latency_ms: number
+}
+
+export type ExperimentRunResponse = {
+  run_id: string
+  workspace_id: string
+  strategy: string
+  top_k: number
+  created_at: string
+  metrics: ExperimentMetrics
+  results: ExperimentCaseResult[]
+  report_markdown_path: string
+}
+
+export type ExperimentSummary = {
+  run_id: string
+  workspace_id: string
+  strategy: string
+  top_k: number
+  created_at: string
+  metrics: ExperimentMetrics
+}
+
+export type ExperimentListResponse = {
+  items: ExperimentSummary[]
+  total: number
+}
+
+export type ExperimentReportResponse = {
+  run_id: string
+  workspace_id: string
+  markdown: string
+}

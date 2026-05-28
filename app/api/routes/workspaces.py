@@ -5,6 +5,12 @@ from app.schemas.document import (
     DocumentDetail,
     DocumentSummary,
 )
+from app.schemas.experiment import (
+    ExperimentListResponse,
+    ExperimentReportResponse,
+    ExperimentRunRequest,
+    ExperimentRunResponse,
+)
 from app.schemas.eval import (
     DeleteEvalQuestionResponse,
     EvalQuestionListResponse,
@@ -33,6 +39,12 @@ from app.services.eval_question_service import (
     delete_eval_question,
     list_eval_questions,
     upload_eval_questions_file,
+)
+from app.services.experiment_service import (
+    get_workspace_experiment,
+    get_workspace_report_markdown,
+    list_workspace_experiments,
+    run_workspace_experiment,
 )
 from app.services.rag_service import answer_research_query
 from app.services.retrieval_service import retrieve_relevant_chunks
@@ -159,4 +171,50 @@ def remove_workspace_eval_question(workspace_id: str, question_id: str):
         deleted=True,
         workspace_id=workspace_id,
         question_id=question_id,
+    )
+
+
+@router.post(
+    "/{workspace_id}/experiments/run",
+    response_model=ExperimentRunResponse,
+)
+def run_workspace_experiment_route(workspace_id: str, request: ExperimentRunRequest):
+    ensure_workspace_exists(workspace_id)
+    return run_workspace_experiment(
+        workspace_id=workspace_id,
+        strategy=request.strategy,
+        top_k=request.top_k,
+    )
+
+
+@router.get(
+    "/{workspace_id}/experiments",
+    response_model=ExperimentListResponse,
+)
+def list_workspace_experiments_route(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    items = list_workspace_experiments(workspace_id=workspace_id)
+    return ExperimentListResponse(items=items, total=len(items))
+
+
+@router.get(
+    "/{workspace_id}/experiments/{run_id}",
+    response_model=ExperimentRunResponse,
+)
+def get_workspace_experiment_route(workspace_id: str, run_id: str):
+    ensure_workspace_exists(workspace_id)
+    return get_workspace_experiment(workspace_id=workspace_id, run_id=run_id)
+
+
+@router.get(
+    "/{workspace_id}/reports/{run_id}",
+    response_model=ExperimentReportResponse,
+)
+def get_workspace_report_route(workspace_id: str, run_id: str):
+    ensure_workspace_exists(workspace_id)
+    markdown = get_workspace_report_markdown(workspace_id=workspace_id, run_id=run_id)
+    return ExperimentReportResponse(
+        run_id=run_id,
+        workspace_id=workspace_id,
+        markdown=markdown,
     )

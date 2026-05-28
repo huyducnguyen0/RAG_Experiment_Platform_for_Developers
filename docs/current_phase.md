@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase Eval 3 - Golden Questions API
+Current phase: Phase Eval 4 - Workspace Experiments and Reports
 
 Current goal:
-Add workspace-level Golden Questions upload/list/delete APIs for evaluation workflows.
+Run keyword baseline experiments per workspace and expose run history + report retrieval APIs.
 
 Current constraints:
 - Keep keyword baseline as-is (no vector/hybrid/rerank yet).
@@ -11,12 +11,13 @@ Current constraints:
 - No production database migration.
 
 Next task:
-- Move to Phase Eval 3:
-  - wire frontend Golden Questions tab to upload/list/delete
-  - add experiments run/list/detail APIs
+- Move to Phase Vector 1:
+  - add vector retrieval strategy
+  - run comparative eval between keyword and vector
 
 Expected behavior:
 - Swagger exposes:
-  - POST /workspaces/{workspace_id}/eval/questions/upload
-  - GET /workspaces/{workspace_id}/eval/questions
-  - DELETE /workspaces/{workspace_id}/eval/questions/{question_id}
+  - POST /workspaces/{workspace_id}/experiments/run
+  - GET /workspaces/{workspace_id}/experiments
+  - GET /workspaces/{workspace_id}/experiments/{run_id}
+  - GET /workspaces/{workspace_id}/reports/{run_id}

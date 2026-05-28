@@ -20,11 +20,15 @@ import {
   deleteWorkspaceDocument,
   deleteWorkspaceEvalQuestion,
   fetchHealth,
+  getWorkspaceExperiment,
+  getWorkspaceReport,
+  listWorkspaceExperiments,
   fetchWorkspaceDocument,
   listWorkspaceDocuments,
   listWorkspaceEvalQuestions,
   listWorkspaces,
   queryWorkspaceResearch,
+  runWorkspaceExperiment,
   uploadWorkspaceDocument,
   uploadWorkspaceEvalQuestions,
 } from './api/client'
@@ -32,6 +36,9 @@ import type {
   DocumentDetail,
   DocumentSummary,
   EvalQuestion,
+  ExperimentReportResponse,
+  ExperimentRunResponse,
+  ExperimentSummary,
   ResearchQueryResponse,
   WorkspaceSummary,
 } from './types/api'
@@ -53,6 +60,9 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
 
   const [evalQuestions, setEvalQuestions] = useState<EvalQuestion[]>([])
+  const [experiments, setExperiments] = useState<ExperimentSummary[]>([])
+  const [selectedRun, setSelectedRun] = useState<ExperimentRunResponse | null>(null)
+  const [selectedReport, setSelectedReport] = useState<ExperimentReportResponse | null>(null)
   const [question, setQuestion] = useState('What does this workspace say about FastAPI?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
 
@@ -61,6 +71,8 @@ function App() {
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false)
   const [isUploadingDocument, setIsUploadingDocument] = useState(false)
   const [isUploadingEval, setIsUploadingEval] = useState(false)
+  const [isRunningExperiment, setIsRunningExperiment] = useState(false)
+  const [isLoadingReport, setIsLoadingReport] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
 
@@ -125,6 +137,11 @@ function App() {
         const refreshed = await listWorkspaces()
         setWorkspaces(refreshed)
       }
+
+      const experimentList = await listWorkspaceExperiments(workspaceId)
+      setExperiments(experimentList.items)
+      setSelectedRun(null)
+      setSelectedReport(null)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
@@ -295,8 +312,67 @@ function App() {
     setEvalQuestions([])
     setSelectedDocumentId('')
     setSelectedDocument(null)
+    setExperiments([])
+    setSelectedRun(null)
+    setSelectedReport(null)
     setAnswer(null)
     setActiveTab('documents')
+  }
+
+  async function handleRunKeywordExperiment() {
+    if (!selectedWorkspaceId) {
+      return
+    }
+
+    setIsRunningExperiment(true)
+    setNotice('')
+    try {
+      const run = await runWorkspaceExperiment(selectedWorkspaceId, {
+        strategy: 'keyword',
+        top_k: 3,
+      })
+      const latest = await listWorkspaceExperiments(selectedWorkspaceId)
+      setExperiments(latest.items)
+      setSelectedRun(run)
+      setActiveTab('experiments')
+      setNotice(`Experiment ${run.run_id} completed`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsRunningExperiment(false)
+    }
+  }
+
+  async function handleSelectExperiment(runId: string) {
+    if (!selectedWorkspaceId) {
+      return
+    }
+    setNotice('')
+    try {
+      const detail = await getWorkspaceExperiment(selectedWorkspaceId, runId)
+      setSelectedRun(detail)
+      setSelectedReport(null)
+      setActiveTab('experiments')
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    }
+  }
+
+  async function handleViewReport(runId: string) {
+    if (!selectedWorkspaceId) {
+      return
+    }
+    setIsLoadingReport(true)
+    setNotice('')
+    try {
+      const report = await getWorkspaceReport(selectedWorkspaceId, runId)
+      setSelectedReport(report)
+      setActiveTab('reports')
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsLoadingReport(false)
+    }
   }
 
   useEffect(() => {
@@ -457,8 +533,22 @@ function App() {
               />
             )}
 
-            {activeTab === 'experiments' && <ComingSoon title="Experiments" />}
-            {activeTab === 'reports' && <ComingSoon title="Reports" />}
+            {activeTab === 'experiments' && (
+              <ExperimentsTab
+                experiments={experiments}
+                selectedRun={selectedRun}
+                isRunningExperiment={isRunningExperiment}
+                onRunKeywordExperiment={handleRunKeywordExperiment}
+                onSelectExperiment={handleSelectExperiment}
+                onViewReport={handleViewReport}
+              />
+            )}
+            {activeTab === 'reports' && (
+              <ReportsTab
+                selectedReport={selectedReport}
+                isLoadingReport={isLoadingReport}
+              />
+            )}
 
             {activeTab === 'playground' && (
               <PlaygroundTab
@@ -703,6 +793,120 @@ function GoldenTab({
   )
 }
 
+function ExperimentsTab({
+  experiments,
+  selectedRun,
+  isRunningExperiment,
+  onRunKeywordExperiment,
+  onSelectExperiment,
+  onViewReport,
+}: {
+  experiments: ExperimentSummary[]
+  selectedRun: ExperimentRunResponse | null
+  isRunningExperiment: boolean
+  onRunKeywordExperiment: () => void
+  onSelectExperiment: (runId: string) => void
+  onViewReport: (runId: string) => void
+}) {
+  return (
+    <section className="tab-layout">
+      <section className="card">
+        <div className="card-title">
+          <Sparkles size={17} />
+          <h2>Run Evaluation</h2>
+        </div>
+        <button className="btn primary" type="button" onClick={onRunKeywordExperiment} disabled={isRunningExperiment}>
+          {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Beaker size={15} />}
+          Run keyword baseline (top_k=3)
+        </button>
+      </section>
+
+      <section className="card">
+        <div className="card-title">
+          <FileText size={17} />
+          <h2>Experiment Runs</h2>
+        </div>
+        {experiments.length === 0 ? (
+          <p className="meta">No runs yet.</p>
+        ) : (
+          <div className="qa-list">
+            {experiments.map((run) => (
+              <article className="qa-item" key={run.run_id}>
+                <div className="row-between">
+                  <strong>{run.run_id}</strong>
+                  <div className="row-buttons">
+                    <button className="btn secondary" type="button" onClick={() => onSelectExperiment(run.run_id)}>
+                      Detail
+                    </button>
+                    <button className="btn secondary" type="button" onClick={() => onViewReport(run.run_id)}>
+                      Report
+                    </button>
+                  </div>
+                </div>
+                <p className="meta">
+                  {run.strategy} | hit@k {run.metrics.hit_at_k.toFixed(3)} | mrr {run.metrics.mrr.toFixed(3)}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {selectedRun && (
+        <section className="card">
+          <div className="card-title">
+            <Search size={17} />
+            <h2>Run Detail</h2>
+          </div>
+          <p className="meta">{selectedRun.run_id} | {selectedRun.created_at}</p>
+          <div className="count-grid">
+            <Stat label="Hit@k" value={selectedRun.metrics.hit_at_k.toFixed(3)} />
+            <Stat label="Recall@k" value={selectedRun.metrics.recall_at_k.toFixed(3)} />
+            <Stat label="Precision@k" value={selectedRun.metrics.precision_at_k.toFixed(3)} />
+            <Stat label="MRR" value={selectedRun.metrics.mrr.toFixed(3)} />
+          </div>
+        </section>
+      )}
+    </section>
+  )
+}
+
+function ReportsTab({
+  selectedReport,
+  isLoadingReport,
+}: {
+  selectedReport: ExperimentReportResponse | null
+  isLoadingReport: boolean
+}) {
+  if (isLoadingReport) {
+    return (
+      <section className="card">
+        <p className="meta inline">
+          <Loader2 className="spin" size={14} /> Loading report...
+        </p>
+      </section>
+    )
+  }
+
+  if (!selectedReport) {
+    return (
+      <section className="card">
+        <p className="meta">Select "Report" from Experiments tab to view markdown output.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="card">
+      <div className="card-title">
+        <FileText size={17} />
+        <h2>Report {selectedReport.run_id}</h2>
+      </div>
+      <pre className="preview">{selectedReport.markdown}</pre>
+    </section>
+  )
+}
+
 function PlaygroundTab({
   question,
   answer,
@@ -756,18 +960,6 @@ function PlaygroundTab({
           </div>
         </section>
       )}
-    </section>
-  )
-}
-
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <section className="card">
-      <div className="card-title">
-        <Sparkles size={17} />
-        <h2>{title}</h2>
-      </div>
-      <p className="meta">This tab is reserved for next phase implementation.</p>
     </section>
   )
 }

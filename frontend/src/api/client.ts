@@ -6,6 +6,9 @@ import type {
   DocumentSummary,
   EvalQuestionListResponse,
   EvalQuestionUploadResponse,
+  ExperimentListResponse,
+  ExperimentReportResponse,
+  ExperimentRunResponse,
   HealthResponse,
   ResearchQueryRequest,
   ResearchQueryResponse,
@@ -158,6 +161,39 @@ export async function deleteWorkspaceEvalQuestion(
   return request(`/workspaces/${workspaceId}/eval/questions/${questionId}`, {
     method: 'DELETE',
   })
+}
+
+export async function runWorkspaceExperiment(
+  workspaceId: string,
+  payload: { strategy: string; top_k: number },
+): Promise<ExperimentRunResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function listWorkspaceExperiments(
+  workspaceId: string,
+): Promise<ExperimentListResponse> {
+  return request(`/workspaces/${workspaceId}/experiments`)
+}
+
+export async function getWorkspaceExperiment(
+  workspaceId: string,
+  runId: string,
+): Promise<ExperimentRunResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/${runId}`)
+}
+
+export async function getWorkspaceReport(
+  workspaceId: string,
+  runId: string,
+): Promise<ExperimentReportResponse> {
+  return request(`/workspaces/${workspaceId}/reports/${runId}`)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
