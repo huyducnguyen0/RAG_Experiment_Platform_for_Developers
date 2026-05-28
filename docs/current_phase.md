@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase 6 - Simple Retrieval
+Current phase: Phase 7 - RAG Query
 
 Current goal:
-Retrieve relevant chunks from uploaded documents using simple keyword matching.
+Answer research questions using retrieved document chunks as context.
 
 Current constraints:
 - Do not build RAG yet.
@@ -13,13 +13,14 @@ Current constraints:
 - Store documents simply in local files/metadata for the MVP.
 
 Next task:
-Add keyword retrieval:
-- app/api/routes/research.py
-- app/schemas/research.py
-- app/services/retrieval_service.py
-- include research router in app/main.py
+Add RAG-style query flow:
+- POST /research/query
+- app/services/ai_service.py
+- app/services/rag_service.py
+- update app/schemas/research.py
+- update app/api/routes/research.py
 
 Expected behavior:
-- POST /research/retrieve accepts a question and top_k.
-- It returns the most relevant chunks by keyword score.
-- It does not call an LLM or vector database.
+- POST /research/query retrieves chunks, builds context, and returns answer + sources.
+- It works in mock mode without API keys.
+- If no chunks match, it says the documents do not contain enough information.
