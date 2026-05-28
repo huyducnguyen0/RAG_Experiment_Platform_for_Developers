@@ -222,6 +222,12 @@ h2 {
   min-width: 0;
 }
 
+.button-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
 .upload-zone {
   align-items: center;
   background: var(--surface-soft);
@@ -559,6 +565,12 @@ button:disabled {
   .panel-heading.with-action {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .button-row {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
   }
 
   .status-button {

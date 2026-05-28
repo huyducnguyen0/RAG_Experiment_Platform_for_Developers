@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import {
   createWorkspace,
+  deleteWorkspace,
   deleteWorkspaceDocument,
   fetchHealth,
   fetchWorkspaceDocument,
@@ -49,6 +50,7 @@ function App() {
   const [notice, setNotice] = useState('')
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false)
   const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false)
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isQuerying, setIsQuerying] = useState(false)
@@ -177,6 +179,36 @@ function App() {
       setNotice(getErrorMessage(error))
     } finally {
       setIsRenamingWorkspace(false)
+    }
+  }
+
+  async function handleDeleteWorkspace() {
+    if (!selectedWorkspaceId) {
+      return
+    }
+
+    const workspaceLabel = selectedWorkspace?.name ?? selectedWorkspaceName
+    const confirmed = window.confirm(
+      `Delete workspace "${workspaceLabel}" and all documents inside it?`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsDeletingWorkspace(true)
+    setNotice('')
+
+    try {
+      await deleteWorkspace(selectedWorkspaceId)
+      closeWorkspace()
+      const items = await listWorkspaces()
+      setWorkspaces(items)
+      setNotice(`Deleted workspace ${workspaceLabel}`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsDeletingWorkspace(false)
     }
   }
 
@@ -359,9 +391,24 @@ function App() {
                 <Folder size={18} aria-hidden="true" />
                 <h2>{selectedWorkspace?.name ?? 'Workspace'}</h2>
               </div>
-              <button className="secondary-button" type="button" onClick={closeWorkspace}>
-                All workspaces
-              </button>
+              <div className="button-row">
+                <button className="secondary-button" type="button" onClick={closeWorkspace}>
+                  All workspaces
+                </button>
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={handleDeleteWorkspace}
+                  disabled={isDeletingWorkspace}
+                >
+                  {isDeletingWorkspace ? (
+                    <Loader2 className="spin" size={16} aria-hidden="true" />
+                  ) : (
+                    <Trash2 size={16} aria-hidden="true" />
+                  )}
+                  Delete
+                </button>
+              </div>
             </div>
             <div className="rename-row compact">
               <input

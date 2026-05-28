@@ -1,5 +1,6 @@
 import type {
   DeleteDocumentResponse,
+  DeleteWorkspaceResponse,
   DocumentDetail,
   DocumentSummary,
   HealthResponse,
@@ -43,6 +44,12 @@ export async function renameWorkspace(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteWorkspace(workspaceId: string): Promise<DeleteWorkspaceResponse> {
+  return request(`/workspaces/${workspaceId}`, {
+    method: 'DELETE',
   })
 }
 
