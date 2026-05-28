@@ -5,6 +5,11 @@ from app.schemas.document import (
     DocumentDetail,
     DocumentSummary,
 )
+from app.schemas.eval import (
+    DeleteEvalQuestionResponse,
+    EvalQuestionListResponse,
+    EvalQuestionUploadResponse,
+)
 from app.schemas.research import (
     ResearchQueryRequest,
     ResearchQueryResponse,
@@ -23,6 +28,11 @@ from app.services.document_service import (
     get_document,
     list_documents,
     save_uploaded_document,
+)
+from app.services.eval_question_service import (
+    delete_eval_question,
+    list_eval_questions,
+    upload_eval_questions_file,
 )
 from app.services.rag_service import answer_research_query
 from app.services.retrieval_service import retrieve_relevant_chunks
@@ -112,4 +122,41 @@ def query_workspace(workspace_id: str, request: ResearchQueryRequest):
         question=request.question,
         top_k=request.top_k,
         workspace_id=workspace_id,
+    )
+
+
+@router.post(
+    "/{workspace_id}/eval/questions/upload",
+    response_model=EvalQuestionUploadResponse,
+)
+def upload_workspace_eval_questions(
+    workspace_id: str,
+    file: UploadFile = File(...),
+):
+    ensure_workspace_exists(workspace_id)
+    imported = upload_eval_questions_file(workspace_id=workspace_id, upload_file=file)
+    return EvalQuestionUploadResponse(workspace_id=workspace_id, imported=imported)
+
+
+@router.get(
+    "/{workspace_id}/eval/questions",
+    response_model=EvalQuestionListResponse,
+)
+def get_workspace_eval_questions(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    items = list_eval_questions(workspace_id=workspace_id)
+    return EvalQuestionListResponse(items=items, total=len(items))
+
+
+@router.delete(
+    "/{workspace_id}/eval/questions/{question_id}",
+    response_model=DeleteEvalQuestionResponse,
+)
+def remove_workspace_eval_question(workspace_id: str, question_id: str):
+    ensure_workspace_exists(workspace_id)
+    delete_eval_question(workspace_id=workspace_id, question_id=question_id)
+    return DeleteEvalQuestionResponse(
+        deleted=True,
+        workspace_id=workspace_id,
+        question_id=question_id,
     )

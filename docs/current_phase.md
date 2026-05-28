@@ -1,9 +1,9 @@
 # Current Phase
 
-Current phase: Phase Eval 2 - Evaluation Report Export
+Current phase: Phase Eval 3 - Golden Questions API
 
 Current goal:
-Export evaluation results into JSON/Markdown report files with timestamped outputs for comparison.
+Add workspace-level Golden Questions upload/list/delete APIs for evaluation workflows.
 
 Current constraints:
 - Keep keyword baseline as-is (no vector/hybrid/rerank yet).
@@ -12,10 +12,11 @@ Current constraints:
 
 Next task:
 - Move to Phase Eval 3:
-  - add golden question upload/list APIs per workspace
-  - wire frontend Golden Questions tab to those APIs
+  - wire frontend Golden Questions tab to upload/list/delete
+  - add experiments run/list/detail APIs
 
 Expected behavior:
-- Running eval script prints metrics and writes:
-  - reports/retrieval_eval_*.json
-  - reports/retrieval_eval_*.md
+- Swagger exposes:
+  - POST /workspaces/{workspace_id}/eval/questions/upload
+  - GET /workspaces/{workspace_id}/eval/questions
+  - DELETE /workspaces/{workspace_id}/eval/questions/{question_id}
