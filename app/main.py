@@ -1,6 +1,29 @@
-def main():
-    print("Hello from agentic-research-os!")
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI(title="Agentic Research OS")
 
 
-if __name__ == "__main__":
-    main()
+class ChatRequest(BaseModel):
+    question: str
+
+
+@app.get("/")
+def root():
+    return {
+        "message": "Agentic Research OS is running"
+    }
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    return {
+        "answer": f"You asked: {request.question}"
+    }
