@@ -21,3 +21,9 @@ Expected behavior:
   - GET /workspaces/{workspace_id}/experiments
   - GET /workspaces/{workspace_id}/experiments/{run_id}
   - GET /workspaces/{workspace_id}/reports/{run_id}
+
+Project memory docs:
+- `docs/codebase_status.md`
+- `docs/feature_status.md`
+- `docs/architecture_snapshot.md`
+- `docs/next_chat_handoff.md`
