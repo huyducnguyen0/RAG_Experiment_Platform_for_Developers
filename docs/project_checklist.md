@@ -794,37 +794,71 @@ Evaluate whether retrieval and answers are actually good.
 
 ## Checklist
 
-### 1. Golden Dataset
+### 1. Eval 1 - Golden Dataset Preparation
 
-- [ ] Create `eval/golden_questions.jsonl` or similar.
-- [ ] Add question.
-- [ ] Add expected answer.
-- [ ] Add expected relevant chunks.
+- [ ] Create workspace-scoped evaluation dataset format.
+- [ ] Define JSONL schema with `question`, `expected_chunk_ids`, `top_k`, and `notes`.
+- [ ] Prepare sample documents that can actually be uploaded into the current platform.
+- [ ] Prepare a `golden_questions` template file for upload.
+- [x] Add helper files/scripts so chunk id mapping is not fully manual.
 
-### 2. Retrieval Evaluation
+### 2. Eval 2 - Golden Dataset Validation
 
-- [ ] Measure whether expected chunks appear in top-k.
-- [ ] Compute simple recall@k.
-- [ ] Compute precision@k if useful.
+- [x] Upload golden questions per workspace.
+- [x] Validate that every question is linked to the correct workspace.
+- [x] Validate that every `expected_chunk_ids` value points to real chunk ids in uploaded documents.
+- [x] Reject malformed JSONL rows with clear error messages.
+- [ ] Confirm list/delete APIs work for golden questions.
 
-### 3. Answer Evaluation
+### 3. Eval 3 - Retrieval Metrics
+
+- [x] Measure whether expected chunks appear in top-k.
+- [x] Compute `hit@k`.
+- [x] Compute `recall@k`.
+- [x] Compute `precision@k`.
+- [x] Compute `MRR`.
+- [x] Measure average latency per question.
+
+### 4. Eval 4 - Workspace Experiments
+
+- [x] Run retrieval experiments per workspace.
+- [x] Save one JSON result per run.
+- [x] Save one Markdown report per run.
+- [x] Expose API to list experiment runs.
+- [x] Expose API to view experiment detail.
+- [x] Expose API to fetch report markdown.
+- [x] Show experiment history in the frontend.
+
+### 5. Eval 5 - Report Quality and Debugging
+
+- [x] Include per-question expected vs returned chunk ids in reports.
+- [x] Make failed cases easy to inspect.
+- [x] Show enough metadata to know which workspace, strategy, and top_k were used.
+- [x] Keep reports readable for manual debugging.
+
+### 6. Eval 6 - Strategy Comparison
+
+- [x] Keep `keyword` as baseline.
+- [x] Add `vector` as a second retrieval strategy.
+- [x] Add `hybrid` as a combined keyword + vector strategy.
+- [x] Run the same golden set on multiple strategies.
+- [x] Compare metric differences across runs.
+- [ ] Identify failure cases where one strategy helps and the other fails.
+
+### 7. Eval 7 - Answer Evaluation Later
 
 - [ ] Use simple manual review first.
-- [ ] Add LLM-as-judge later.
-- [ ] Score faithfulness.
-- [ ] Score relevance.
-
-### 4. Report
-
-- [ ] Print evaluation summary.
-- [ ] Save eval results.
-- [ ] Compare changes across experiments.
+- [ ] Add answer-level evaluation after retrieval loop is stable.
+- [ ] Add faithfulness scoring later.
+- [ ] Add relevance scoring later.
+- [ ] Consider LLM-as-judge only after retrieval evaluation is trustworthy.
 
 ## Definition of Done
 
-- [ ] There is a small test set.
-- [ ] Retrieval can be measured.
-- [ ] Answer quality can be reviewed.
+- [ ] There is a workspace-scoped golden dataset that can be uploaded cleanly.
+- [ ] Retrieval can be measured per workspace and per strategy.
+- [ ] Experiment runs are saved and can be reviewed later.
+- [ ] Reports help debug why retrieval passed or failed.
 - [ ] User can improve RAG scientifically instead of guessing.
 
 ---

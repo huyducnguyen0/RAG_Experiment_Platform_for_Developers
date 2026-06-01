@@ -11,7 +11,7 @@ class RetrievedChunk(BaseModel):
     document_title: str
     chunk_id: str
     chunk_index: int
-    score: int
+    score: float
     content: str
 
 
@@ -30,7 +30,7 @@ class ResearchSource(BaseModel):
     document_title: str
     chunk_id: str
     chunk_index: int
-    score: int
+    score: float
     preview: str
 
 

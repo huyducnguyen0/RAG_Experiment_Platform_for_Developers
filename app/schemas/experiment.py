@@ -1,8 +1,13 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ExperimentRunRequest(BaseModel):
     strategy: str = "keyword"
+    top_k: int = 3
+
+
+class ExperimentCompareRequest(BaseModel):
+    strategies: list[str] = Field(default_factory=lambda: ["keyword", "vector", "hybrid"])
     top_k: int = 3
 
 
@@ -20,6 +25,7 @@ class ExperimentCaseResult(BaseModel):
     question: str
     workspace_id: str
     top_k: int
+    notes: str = ""
     expected_chunk_ids: list[str]
     returned_chunk_ids: list[str]
     relevant_count: int
@@ -59,3 +65,11 @@ class ExperimentReportResponse(BaseModel):
     run_id: str
     workspace_id: str
     markdown: str
+
+
+class ExperimentComparisonResponse(BaseModel):
+    workspace_id: str
+    top_k: int
+    created_at: str
+    best_strategy: str | None
+    runs: list[ExperimentSummary]

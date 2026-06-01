@@ -1,0 +1,121 @@
+question,expected_answer,reference_doc,reference_doc_key,question_type,difficulty,source
+To whom did the Virgin Mary allegedly appear in 1858 in Lourdes France?,Saint Bernadette Soubirous,doc_university_of_notre_dame_4a7a4356.md,university_of_notre_dame_4a7a4356,factual,easy,squad
+What is in front of the Notre Dame Main Building?,a copper statue of Christ,doc_university_of_notre_dame_4a7a4356.md,university_of_notre_dame_4a7a4356,factual,easy,squad
+The Basilica of the Sacred heart at Notre Dame is beside to which structure?,the Main Building,doc_university_of_notre_dame_4a7a4356.md,university_of_notre_dame_4a7a4356,factual,easy,squad
+What is the Grotto at Notre Dame?,a Marian place of prayer and reflection,doc_university_of_notre_dame_4a7a4356.md,university_of_notre_dame_4a7a4356,factual,easy,squad
+What sits on top of the Main Building at Notre Dame?,a golden statue of the Virgin Mary,doc_university_of_notre_dame_4a7a4356.md,university_of_notre_dame_4a7a4356,factual,easy,squad
+When did the Scholastic Magazine of Notre dame begin publishing?,September 1876,doc_university_of_notre_dame_dcc3a3ef.md,university_of_notre_dame_dcc3a3ef,factual,easy,squad
+How often is Notre Dame's the Juggler published?,twice,doc_university_of_notre_dame_dcc3a3ef.md,university_of_notre_dame_dcc3a3ef,factual,easy,squad
+What is the daily student paper at Notre Dame called?,The Observer,doc_university_of_notre_dame_dcc3a3ef.md,university_of_notre_dame_dcc3a3ef,factual,easy,squad
+How many student news papers are found at Notre Dame?,three,doc_university_of_notre_dame_dcc3a3ef.md,university_of_notre_dame_dcc3a3ef,factual,easy,squad
+In what year did the student paper Common Sense begin publication at Notre Dame?,1987,doc_university_of_notre_dame_dcc3a3ef.md,university_of_notre_dame_dcc3a3ef,factual,easy,squad
+Where is the headquarters of the Congregation of the Holy Cross?,Rome,doc_university_of_notre_dame_5150e109.md,university_of_notre_dame_5150e109,factual,easy,squad
+What is the primary seminary of the Congregation of the Holy Cross?,Moreau Seminary,doc_university_of_notre_dame_5150e109.md,university_of_notre_dame_5150e109,factual,easy,squad
+What is the oldest structure at Notre Dame?,Old College,doc_university_of_notre_dame_5150e109.md,university_of_notre_dame_5150e109,factual,easy,squad
+What individuals live at Fatima House at Notre Dame?,Retired priests and brothers,doc_university_of_notre_dame_5150e109.md,university_of_notre_dame_5150e109,factual,easy,squad
+Which prize did Frederick Buechner create?,Buechner Prize for Preaching,doc_university_of_notre_dame_5150e109.md,university_of_notre_dame_5150e109,factual,easy,squad
+How many BS level degrees are offered in the College of Engineering at Notre Dame?,eight,doc_university_of_notre_dame_f50aef1c.md,university_of_notre_dame_f50aef1c,factual,easy,squad
+In what year was the College of Engineering at Notre Dame formed?,1920,doc_university_of_notre_dame_f50aef1c.md,university_of_notre_dame_f50aef1c,factual,easy,squad
+Before the creation of the College of Engineering similar studies were carried out at which Notre Dame college?,the College of Science,doc_university_of_notre_dame_f50aef1c.md,university_of_notre_dame_f50aef1c,factual,easy,squad
+How many departments are within the Stinson-Remick Hall of Engineering?,five,doc_university_of_notre_dame_f50aef1c.md,university_of_notre_dame_f50aef1c,factual,easy,squad
+The College of Science began to offer civil engineering courses beginning at what time at Notre Dame?,the 1870s,doc_university_of_notre_dame_f50aef1c.md,university_of_notre_dame_f50aef1c,factual,easy,squad
+What entity provides help with the management of time for new students at Notre Dame?,Learning Resource Center,doc_university_of_notre_dame_5cd0d941.md,university_of_notre_dame_5cd0d941,factual,easy,squad
+How many colleges for undergraduates are at Notre Dame?,five,doc_university_of_notre_dame_5cd0d941.md,university_of_notre_dame_5cd0d941,factual,easy,squad
+What was created at Notre Dame in 1962 to assist first year students?,The First Year of Studies program,doc_university_of_notre_dame_5cd0d941.md,university_of_notre_dame_5cd0d941,factual,easy,squad
+"Which organization declared the First Year of Studies program at Notre Dame ""outstanding?""",U.S. News & World Report,doc_university_of_notre_dame_5cd0d941.md,university_of_notre_dame_5cd0d941,factual,easy,squad
+The granting of Doctorate degrees first occurred in what year at Notre Dame?,1924,doc_university_of_notre_dame_56e44f78.md,university_of_notre_dame_56e44f78,factual,easy,squad
+What type of degree is an M.Div.?,Master of Divinity,doc_university_of_notre_dame_56e44f78.md,university_of_notre_dame_56e44f78,factual,easy,squad
+Which program at Notre Dame offers a Master of Education degree?,Alliance for Catholic Education,doc_university_of_notre_dame_56e44f78.md,university_of_notre_dame_56e44f78,factual,easy,squad
+In what year was a Master of Arts course first offered at Notre Dame?,1854,doc_university_of_notre_dame_56e44f78.md,university_of_notre_dame_56e44f78,factual,easy,squad
+Which department at Notre Dame is the only one to not offer a PhD program?,Department of Pre-Professional Studies,doc_university_of_notre_dame_56e44f78.md,university_of_notre_dame_56e44f78,factual,easy,squad
+What institute at Notre Dame studies  the reasons for violent conflict?,Joan B. Kroc Institute for International Peace Studies,doc_university_of_notre_dame_3c3ea751.md,university_of_notre_dame_3c3ea751,factual,easy,squad
+What is the title of Notre Dame's Theodore Hesburgh?,President Emeritus of the University of Notre Dame,doc_university_of_notre_dame_3c3ea751.md,university_of_notre_dame_3c3ea751,factual,easy,squad
+In what year was the Joan B. Kroc Institute for International Peace Studies founded?,1986,doc_university_of_notre_dame_3c3ea751.md,university_of_notre_dame_3c3ea751,factual,easy,squad
+To whom was John B. Kroc married?,Ray Kroc,doc_university_of_notre_dame_3c3ea751.md,university_of_notre_dame_3c3ea751,factual,easy,squad
+What company did Ray Kroc own?,McDonald's,doc_university_of_notre_dame_3c3ea751.md,university_of_notre_dame_3c3ea751,factual,easy,squad
+How many stories tall is the main library at Notre Dame?,14,doc_university_of_notre_dame_0b4c1c8f.md,university_of_notre_dame_0b4c1c8f,factual,easy,squad
+What is the name of the main library at Notre Dame?,Theodore M. Hesburgh Library,doc_university_of_notre_dame_0b4c1c8f.md,university_of_notre_dame_0b4c1c8f,factual,easy,squad
+In what year was the Theodore M. Hesburgh Library at Notre Dame finished?,1963,doc_university_of_notre_dame_0b4c1c8f.md,university_of_notre_dame_0b4c1c8f,factual,easy,squad
+Which artist created the mural on the Theodore M. Hesburgh Library?,Millard Sheets,doc_university_of_notre_dame_0b4c1c8f.md,university_of_notre_dame_0b4c1c8f,factual,easy,squad
+What is a common name to reference the mural created by Millard Sheets at Notre Dame?,Touchdown Jesus,doc_university_of_notre_dame_0b4c1c8f.md,university_of_notre_dame_0b4c1c8f,factual,easy,squad
+How many incoming students did Notre Dame admit in fall 2015?,"3,577",doc_university_of_notre_dame_b0167466.md,university_of_notre_dame_b0167466,factual,easy,squad
+What percentage of students were admitted to Notre Dame in fall 2015?,19.7%,doc_university_of_notre_dame_b0167466.md,university_of_notre_dame_b0167466,factual,easy,squad
+Where does Notre Dame rank in terms of academic profile among research universities in the US?,the top 10 to 15 in the nation,doc_university_of_notre_dame_b0167466.md,university_of_notre_dame_b0167466,factual,easy,squad
+What percentage of students at Notre Dame participated in the Early Action program?,39.1%,doc_university_of_notre_dame_b0167466.md,university_of_notre_dame_b0167466,factual,easy,squad
+How many miles does the average student at Notre Dame travel to study there?,more than 750 miles,doc_university_of_notre_dame_b0167466.md,university_of_notre_dame_b0167466,factual,easy,squad
+Where did U.S. News & World Report rank Notre Dame in its 2015-2016 university rankings?,18th overall,doc_university_of_notre_dame_384315a8.md,university_of_notre_dame_384315a8,factual,easy,squad
+Forbes.com placed Notre Dame at what position compared to other US research universities?,8th,doc_university_of_notre_dame_384315a8.md,university_of_notre_dame_384315a8,factual,easy,squad
+The undergrad school at the Mendoza College of Business was ranked where according to BusinessWeek?,1st overall,doc_university_of_notre_dame_384315a8.md,university_of_notre_dame_384315a8,factual,easy,squad
+In 2014 what entity named Notre Dame 10th best of all American universities?,USA Today,doc_university_of_notre_dame_384315a8.md,university_of_notre_dame_384315a8,factual,easy,squad
+What percentage of Notre Dame students decide to study abroad?,57.6%,doc_university_of_notre_dame_384315a8.md,university_of_notre_dame_384315a8,factual,easy,squad
+What person was the Director of the Science Museum at Notre Dame in the late 19th century?,"Father Joseph Carrier, C.S.C.",doc_university_of_notre_dame_852bfdc1.md,university_of_notre_dame_852bfdc1,factual,easy,squad
+What was the lifespan of John Augustine Zahm?,1851–1921,doc_university_of_notre_dame_852bfdc1.md,university_of_notre_dame_852bfdc1,factual,easy,squad
+What program did John Augustine Zahm come to co-direct at Nore Dame?,the Science Department,doc_university_of_notre_dame_852bfdc1.md,university_of_notre_dame_852bfdc1,factual,easy,squad
+What book did John Zahm write in 1896?,Evolution and Dogma,doc_university_of_notre_dame_852bfdc1.md,university_of_notre_dame_852bfdc1,factual,easy,squad
+What professorship did Father Josh Carrier hold at Notre Dame?,Professor of Chemistry and Physics,doc_university_of_notre_dame_852bfdc1.md,university_of_notre_dame_852bfdc1,factual,easy,squad
+In what year did Albert Zahm begin comparing aeronatical models at Notre Dame?,1882,doc_university_of_notre_dame_ba0ff8d2.md,university_of_notre_dame_ba0ff8d2,factual,easy,squad
+Which professor sent the first wireless message in the USA?,Professor Jerome Green,doc_university_of_notre_dame_ba0ff8d2.md,university_of_notre_dame_ba0ff8d2,factual,easy,squad
+In what year did Jerome Green send his first wireless message?,Around 1899,doc_university_of_notre_dame_ba0ff8d2.md,university_of_notre_dame_ba0ff8d2,factual,easy,squad
+Which individual worked on projects at Notre Dame that eventually created neoprene?,Father Julius Nieuwland,doc_university_of_notre_dame_ba0ff8d2.md,university_of_notre_dame_ba0ff8d2,factual,easy,squad
+What did the brother of John Zahm construct at Notre Dame?,an early wind tunnel,doc_university_of_notre_dame_ba0ff8d2.md,university_of_notre_dame_ba0ff8d2,factual,easy,squad
+Work on a germ-free-life ended up in the creation of which Notre Dame institute?,The Lobund Institute,doc_university_of_notre_dame_b4ee0f75.md,university_of_notre_dame_b4ee0f75,factual,easy,squad
+Around what time did Lobund of Notre Dame become independent?,the 1940s,doc_university_of_notre_dame_b4ee0f75.md,university_of_notre_dame_b4ee0f75,factual,easy,squad
+In what year did Lobund at Notre Dame become an Institute?,1950,doc_university_of_notre_dame_b4ee0f75.md,university_of_notre_dame_b4ee0f75,factual,easy,squad
+The Lobund Institute was merged into the Department of Biology at Notre Dame in what year?,1958,doc_university_of_notre_dame_b4ee0f75.md,university_of_notre_dame_b4ee0f75,factual,easy,squad
+When did study of a germ-free-life begin at Notre Dame?,1928,doc_university_of_notre_dame_b4ee0f75.md,university_of_notre_dame_b4ee0f75,factual,easy,squad
+Gurian created what in 1939 at Notre Dame?,The Review of Politics,doc_university_of_notre_dame_791b0e9d.md,university_of_notre_dame_791b0e9d,factual,easy,squad
+What was the Review of Politics inspired by?,German Catholic journals,doc_university_of_notre_dame_791b0e9d.md,university_of_notre_dame_791b0e9d,factual,easy,squad
+Over how many years did Gurian edit the Review of Politics at Notre Dame?,44,doc_university_of_notre_dame_791b0e9d.md,university_of_notre_dame_791b0e9d,factual,easy,squad
+Thomas Stritch was an editor of which publican from Notre Dame?,Review of Politics,doc_university_of_notre_dame_791b0e9d.md,university_of_notre_dame_791b0e9d,factual,easy,squad
+Who was the president of Notre Dame in 2012?,John Jenkins,doc_university_of_notre_dame_ecbd31ae.md,university_of_notre_dame_ecbd31ae,factual,easy,squad
+The Kellogg Institute for International Studies is part of which university?,Notre Dame,doc_university_of_notre_dame_ecbd31ae.md,university_of_notre_dame_ecbd31ae,factual,easy,squad
+What does the Kroc Institute at Notre Dame focus on?,International Peace studies,doc_university_of_notre_dame_ecbd31ae.md,university_of_notre_dame_ecbd31ae,factual,easy,squad
+In what year did Notre Dame begin to host the Global Adaptation Index?,2013,doc_university_of_notre_dame_ecbd31ae.md,university_of_notre_dame_ecbd31ae,factual,easy,squad
+What threat does the Global Adaptation Index study?,climate change,doc_university_of_notre_dame_ecbd31ae.md,university_of_notre_dame_ecbd31ae,factual,easy,squad
+How many undergrads were attending Notre Dame in 2014?,"8,448",doc_university_of_notre_dame_0996b7bc.md,university_of_notre_dame_0996b7bc,factual,easy,squad
+What percentage of students at Notre Dame are the children of former Notre Dame students?,21–24%,doc_university_of_notre_dame_0996b7bc.md,university_of_notre_dame_0996b7bc,factual,easy,squad
+How many teams participate in the Notre Dame Bookstore Basketball tournament?,over 700,doc_university_of_notre_dame_0996b7bc.md,university_of_notre_dame_0996b7bc,factual,easy,squad
+For what cause is money raised at the Bengal Bouts tournament at Notre Dame?,the Holy Cross Missions in Bangladesh,doc_university_of_notre_dame_0996b7bc.md,university_of_notre_dame_0996b7bc,factual,easy,squad
+How many students in total were at Notre Dame in 2014?,"12,179",doc_university_of_notre_dame_0996b7bc.md,university_of_notre_dame_0996b7bc,factual,easy,squad
+What percentage of undergrads live on the Notre Dame campus?,80%,doc_university_of_notre_dame_0a654f92.md,university_of_notre_dame_0a654f92,factual,easy,squad
+How many student housing areas are reserved for Notre Dame's graduate students?,four,doc_university_of_notre_dame_0a654f92.md,university_of_notre_dame_0a654f92,factual,easy,squad
+How many dorms for males are on the Notre Dame campus?,15,doc_university_of_notre_dame_0a654f92.md,university_of_notre_dame_0a654f92,factual,easy,squad
+What amount of the graduate student body at Notre Dame live on the campus?,20%,doc_university_of_notre_dame_0a654f92.md,university_of_notre_dame_0a654f92,factual,easy,squad
+There are how many dorms for females at Notre Dame?,14,doc_university_of_notre_dame_0a654f92.md,university_of_notre_dame_0a654f92,factual,easy,squad
+What is Congregation of Holy Cross in Latin?,Congregatio a Sancta Cruce,doc_university_of_notre_dame_048901ef.md,university_of_notre_dame_048901ef,factual,easy,squad
+What percentage of Notre Dame students feel they are Christian?,more than 93%,doc_university_of_notre_dame_048901ef.md,university_of_notre_dame_048901ef,factual,easy,squad
+How often is Catholic mass held at Notre Dame in a week?,over 100 times,doc_university_of_notre_dame_048901ef.md,university_of_notre_dame_048901ef,factual,easy,squad
+How many chapels are on the Notre Dame campus?,Fifty-seven,doc_university_of_notre_dame_048901ef.md,university_of_notre_dame_048901ef,factual,easy,squad
+What amount of the student body of Notre Dame identifies as Catholic?,over 80%,doc_university_of_notre_dame_048901ef.md,university_of_notre_dame_048901ef,factual,easy,squad
+What was the music hall at Notre Dame called?,Washington Hall,doc_university_of_notre_dame_438f24db.md,university_of_notre_dame_438f24db,factual,easy,squad
+In what year was the Main Building at Notre Dame razed in a fire?,1879,doc_university_of_notre_dame_438f24db.md,university_of_notre_dame_438f24db,factual,easy,squad
+Who was the president of Notre Dame in 1879?,Rev. William Corby,doc_university_of_notre_dame_438f24db.md,university_of_notre_dame_438f24db,factual,easy,squad
+On what date was the rebuilding of The Main Building begun at Notre Dame after the fire that claimed the previous?,17th of May,doc_university_of_notre_dame_438f24db.md,university_of_notre_dame_438f24db,factual,easy,squad
+What did the Science Hall at Notre Dame come to be known as?,LaFortune Student Center,doc_university_of_notre_dame_438f24db.md,university_of_notre_dame_438f24db,factual,easy,squad
+What type of education was pushed at Notre Dame before its embracing of national standards?,scholastic and classical,doc_university_of_notre_dame_e5764e5a.md,university_of_notre_dame_e5764e5a,factual,easy,squad
+Which college did Notre Dame add in 1921?,College of Commerce,doc_university_of_notre_dame_e5764e5a.md,university_of_notre_dame_e5764e5a,factual,easy,squad
+"In 1919 a new president of Notre Dame was named, who was it?",Father James Burns,doc_university_of_notre_dame_e5764e5a.md,university_of_notre_dame_e5764e5a,factual,easy,squad
+Over how many years did the change to national standards undertaken at Notre Dame in the early 20th century take place?,three years,doc_university_of_notre_dame_e5764e5a.md,university_of_notre_dame_e5764e5a,factual,easy,squad
+Those who attended a Jesuit college may have been forbidden from joining which Law School due to the curricula at the Jesuit institution?,Harvard Law School,doc_university_of_notre_dame_e5764e5a.md,university_of_notre_dame_e5764e5a,factual,easy,squad
+"The Notre Dame football team got a new head coach in 1918, who was it?",Knute Rockne,doc_university_of_notre_dame_78284ef0.md,university_of_notre_dame_78284ef0,factual,easy,squad
+What was the amount of wins Knute Rockne attained at Notre Dame while head coach?,105,doc_university_of_notre_dame_78284ef0.md,university_of_notre_dame_78284ef0,factual,easy,squad
+In what year did the team lead by Knute Rockne win the Rose Bowl?,1925,doc_university_of_notre_dame_78284ef0.md,university_of_notre_dame_78284ef0,factual,easy,squad
+How many years was Knute Rockne head coach at Notre Dame?,13,doc_university_of_notre_dame_78284ef0.md,university_of_notre_dame_78284ef0,factual,easy,squad
+How many national titles were won when Knute Rockne coached at Notre Dame?,three,doc_university_of_notre_dame_78284ef0.md,university_of_notre_dame_78284ef0,factual,easy,squad
+"Catholic people identified with Notre Dame, what religious group did people feel Yale represented?",the Protestant establishment,doc_university_of_notre_dame_cb509bc6.md,university_of_notre_dame_cb509bc6,factual,easy,squad
+Notre Dame students had a showdown in 1924 with which anti-catholic group?,the Ku Klux Klan,doc_university_of_notre_dame_cb509bc6.md,university_of_notre_dame_cb509bc6,factual,easy,squad
+Which college president of Notre Dame is credited with preventing more confrontations between students and the KKK?,Fr. Matthew Walsh,doc_university_of_notre_dame_cb509bc6.md,university_of_notre_dame_cb509bc6,factual,easy,squad
+What type of event did the Klan intend to have at Notre Dame in March of 1924?,a week-long Klavern,doc_university_of_notre_dame_cb509bc6.md,university_of_notre_dame_cb509bc6,factual,easy,squad
+Where did Notre Dame students and the KKK have their encounter?,South Bend,doc_university_of_notre_dame_cb509bc6.md,university_of_notre_dame_cb509bc6,factual,easy,squad
+Which person became vice-president of Notre Dame in 1933?,Father John Francis O'Hara,doc_university_of_notre_dame_e4c96bf4.md,university_of_notre_dame_e4c96bf4,factual,easy,squad
+Who was the president of Notre Dame in 1934?,Father John Francis O'Hara,doc_university_of_notre_dame_e4c96bf4.md,university_of_notre_dame_e4c96bf4,factual,easy,squad
+Irvin Abell was given what award by Notre Dame?,Laetare Medal,doc_university_of_notre_dame_e4c96bf4.md,university_of_notre_dame_e4c96bf4,factual,easy,squad
+Which year was the Laetare Medal first given out at Notre Dame?,1883,doc_university_of_notre_dame_e4c96bf4.md,university_of_notre_dame_e4c96bf4,factual,easy,squad
+For whos glory did Father O'Hara believed that the Notre Dame football team played?,God,doc_university_of_notre_dame_e4c96bf4.md,university_of_notre_dame_e4c96bf4,factual,easy,squad
+Around the time that Rev. Cavanaugh became president of Notre Dame by how much did the undergrad student body of Notre Dame increase?,more than half,doc_university_of_notre_dame_1fc97bd5.md,university_of_notre_dame_1fc97bd5,factual,easy,squad
+Which institute involving animal life did Cavanaugh create at Notre Dame?,Lobund Institute for Animal Studies,doc_university_of_notre_dame_1fc97bd5.md,university_of_notre_dame_1fc97bd5,factual,easy,squad
+What is O'Shaughnessy Hall of Notre Dame formerly known as?,Hall of Liberal Arts,doc_university_of_notre_dame_1fc97bd5.md,university_of_notre_dame_1fc97bd5,factual,easy,squad
+Which president did Notre Dame have in 1947?,"Rev. John J. Cavanaugh, C.S.C.",doc_university_of_notre_dame_1fc97bd5.md,university_of_notre_dame_1fc97bd5,factual,easy,squad
+"Outside of an institute studying animals, what other institute did Cavanugh create at Notre Dame?",Medieval Institute,doc_university_of_notre_dame_1fc97bd5.md,university_of_notre_dame_1fc97bd5,factual,easy,squad
+What was the lifespan of Theodore Hesburgh?,1917–2015,doc_university_of_notre_dame_71bd833c.md,university_of_notre_dame_71bd833c,factual,easy,squad
+In the time that Hesburgh was president of Notre Dame by what factor did the operating budget increase?,18,doc_university_of_notre_dame_71bd833c.md,university_of_notre_dame_71bd833c,factual,easy,squad

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from time import perf_counter
 
-from app.services.retrieval_service import retrieve_relevant_chunks
+from app.services.retrieval_service import prepare_retrieval_strategy, retrieve_relevant_chunks
 
 
 @dataclass
@@ -20,6 +20,7 @@ class RetrievalEvalCaseResult:
     question: str
     workspace_id: str
     top_k: int
+    notes: str
     expected_chunk_ids: list[str]
     returned_chunk_ids: list[str]
     relevant_count: int
@@ -30,11 +31,15 @@ class RetrievalEvalCaseResult:
     latency_ms: float
 
 
-def evaluate_keyword_retrieval(
+def evaluate_retrieval(
     cases: list[RetrievalEvalCase],
+    strategy: str = "keyword",
 ) -> tuple[dict, list[RetrievalEvalCaseResult]]:
     if not cases:
         raise ValueError("At least one evaluation case is required")
+
+    for workspace_id in sorted({case.workspace_id for case in cases}):
+        prepare_retrieval_strategy(workspace_id=workspace_id, strategy=strategy)
 
     results: list[RetrievalEvalCaseResult] = []
 
@@ -44,6 +49,7 @@ def evaluate_keyword_retrieval(
             question=case.question,
             top_k=case.top_k,
             workspace_id=case.workspace_id,
+            strategy=strategy,
         )
         latency_ms = (perf_counter() - started_at) * 1000.0
 
@@ -67,6 +73,7 @@ def evaluate_keyword_retrieval(
                 question=case.question,
                 workspace_id=case.workspace_id,
                 top_k=case.top_k,
+                notes=case.notes,
                 expected_chunk_ids=case.expected_chunk_ids,
                 returned_chunk_ids=returned_chunk_ids,
                 relevant_count=relevant_count,
@@ -80,6 +87,12 @@ def evaluate_keyword_retrieval(
 
     summary = _summarize_results(results)
     return summary, results
+
+
+def evaluate_keyword_retrieval(
+    cases: list[RetrievalEvalCase],
+) -> tuple[dict, list[RetrievalEvalCaseResult]]:
+    return evaluate_retrieval(cases=cases, strategy="keyword")
 
 
 def _reciprocal_rank(

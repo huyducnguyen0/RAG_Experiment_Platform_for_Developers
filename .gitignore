@@ -21,6 +21,8 @@ logs/
 
 # OS
 .DS_Store
+*.lnk
+* - Copy.*
 
 # IDE
 .vscode/

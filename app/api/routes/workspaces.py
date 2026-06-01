@@ -6,6 +6,8 @@ from app.schemas.document import (
     DocumentSummary,
 )
 from app.schemas.experiment import (
+    ExperimentCompareRequest,
+    ExperimentComparisonResponse,
     ExperimentListResponse,
     ExperimentReportResponse,
     ExperimentRunRequest,
@@ -44,6 +46,7 @@ from app.services.experiment_service import (
     get_workspace_experiment,
     get_workspace_report_markdown,
     list_workspace_experiments,
+    run_workspace_experiment_comparison,
     run_workspace_experiment,
 )
 from app.services.rag_service import answer_research_query
@@ -183,6 +186,19 @@ def run_workspace_experiment_route(workspace_id: str, request: ExperimentRunRequ
     return run_workspace_experiment(
         workspace_id=workspace_id,
         strategy=request.strategy,
+        top_k=request.top_k,
+    )
+
+
+@router.post(
+    "/{workspace_id}/experiments/compare",
+    response_model=ExperimentComparisonResponse,
+)
+def compare_workspace_experiments_route(workspace_id: str, request: ExperimentCompareRequest):
+    ensure_workspace_exists(workspace_id)
+    return run_workspace_experiment_comparison(
+        workspace_id=workspace_id,
+        strategies=request.strategies,
         top_k=request.top_k,
     )
 

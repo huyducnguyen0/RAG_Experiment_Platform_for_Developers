@@ -1,0 +1,3 @@
+# University_of_Notre_Dame
+
+The Review of Politics was founded in 1939 by Gurian, modeled after German Catholic journals. It quickly emerged as part of an international Catholic intellectual revival, offering an alternative vision to positivist philosophy. For 44 years, the Review was edited by Gurian, Matthew Fitzsimons, Frederick Crosson, and Thomas Stritch. Intellectual leaders included Gurian, Jacques Maritain, Frank O'Malley, Leo Richard Ward, F. A. Hermens, and John U. Nef. It became a major forum for political ideas and modern political concerns, especially from a Catholic and scholastic tradition.

@@ -27,6 +27,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -197,11 +198,16 @@ h2 {
 }
 
 .inline-form input,
+.inline-form select,
 textarea {
   border: 1px solid var(--border);
   border-radius: 8px;
   min-width: 0;
   padding: 9px 10px;
+}
+
+.inline-form + .btn.full {
+  margin-top: 8px;
 }
 
 textarea {

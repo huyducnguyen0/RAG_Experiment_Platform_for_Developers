@@ -6,6 +6,7 @@ import type {
   DocumentSummary,
   EvalQuestionListResponse,
   EvalQuestionUploadResponse,
+  ExperimentComparisonResponse,
   ExperimentListResponse,
   ExperimentReportResponse,
   ExperimentRunResponse,
@@ -168,6 +169,19 @@ export async function runWorkspaceExperiment(
   payload: { strategy: string; top_k: number },
 ): Promise<ExperimentRunResponse> {
   return request(`/workspaces/${workspaceId}/experiments/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function compareWorkspaceExperiments(
+  workspaceId: string,
+  payload: { strategies: string[]; top_k: number },
+): Promise<ExperimentComparisonResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/compare`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

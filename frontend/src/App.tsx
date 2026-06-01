@@ -15,6 +15,7 @@ import {
   Upload,
 } from 'lucide-react'
 import {
+  compareWorkspaceExperiments,
   createWorkspace,
   deleteWorkspace,
   deleteWorkspaceDocument,
@@ -36,6 +37,7 @@ import type {
   DocumentDetail,
   DocumentSummary,
   EvalQuestion,
+  ExperimentComparisonResponse,
   ExperimentReportResponse,
   ExperimentRunResponse,
   ExperimentSummary,
@@ -45,6 +47,7 @@ import type {
 
 type HealthState = 'checking' | 'online' | 'offline'
 type WorkspaceTab = 'documents' | 'golden' | 'experiments' | 'reports' | 'playground'
+type RetrievalStrategy = 'keyword' | 'vector' | 'hybrid'
 
 function App() {
   const [health, setHealth] = useState<HealthState>('checking')
@@ -62,7 +65,9 @@ function App() {
   const [evalQuestions, setEvalQuestions] = useState<EvalQuestion[]>([])
   const [experiments, setExperiments] = useState<ExperimentSummary[]>([])
   const [selectedRun, setSelectedRun] = useState<ExperimentRunResponse | null>(null)
+  const [selectedComparison, setSelectedComparison] = useState<ExperimentComparisonResponse | null>(null)
   const [selectedReport, setSelectedReport] = useState<ExperimentReportResponse | null>(null)
+  const [experimentStrategy, setExperimentStrategy] = useState<RetrievalStrategy>('keyword')
   const [question, setQuestion] = useState('What does this workspace say about FastAPI?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
 
@@ -79,6 +84,13 @@ function App() {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [workspaces, selectedWorkspaceId],
+  )
+  const invalidEvalQuestions = useMemo(
+    () =>
+      evalQuestions.filter(
+        (item) => item.expected_chunk_ids.length === 0 || item.expected_chunk_ids.every((chunkId) => !chunkId.trim()),
+      ),
+    [evalQuestions],
   )
 
   async function refreshHealth() {
@@ -141,6 +153,7 @@ function App() {
       const experimentList = await listWorkspaceExperiments(workspaceId)
       setExperiments(experimentList.items)
       setSelectedRun(null)
+      setSelectedComparison(null)
       setSelectedReport(null)
     } catch (error) {
       setNotice(getErrorMessage(error))
@@ -206,21 +219,29 @@ function App() {
     }
   }
 
-  async function handleUploadDocument(file: File) {
+  async function handleUploadDocuments(files: File[]) {
     if (!selectedWorkspaceId) {
+      return
+    }
+    if (files.length === 0) {
       return
     }
 
     setIsUploadingDocument(true)
     setNotice('')
     try {
-      const uploaded = await uploadWorkspaceDocument(selectedWorkspaceId, file)
+      let uploaded: DocumentDetail | null = null
+      for (const file of files) {
+        uploaded = await uploadWorkspaceDocument(selectedWorkspaceId, file)
+      }
       const workspaceDocuments = await listWorkspaceDocuments(selectedWorkspaceId)
       setDocuments(workspaceDocuments)
-      setSelectedDocumentId(uploaded.id)
-      setSelectedDocument(uploaded)
+      if (uploaded) {
+        setSelectedDocumentId(uploaded.id)
+        setSelectedDocument(uploaded)
+      }
       await refreshWorkspaces(selectedWorkspaceId)
-      setNotice(`Uploaded ${uploaded.file_name}`)
+      setNotice(`Uploaded ${files.length} file(s)`)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
@@ -314,12 +335,13 @@ function App() {
     setSelectedDocument(null)
     setExperiments([])
     setSelectedRun(null)
+    setSelectedComparison(null)
     setSelectedReport(null)
     setAnswer(null)
     setActiveTab('documents')
   }
 
-  async function handleRunKeywordExperiment() {
+  async function handleRunExperiment() {
     if (!selectedWorkspaceId) {
       return
     }
@@ -328,14 +350,40 @@ function App() {
     setNotice('')
     try {
       const run = await runWorkspaceExperiment(selectedWorkspaceId, {
-        strategy: 'keyword',
+        strategy: experimentStrategy,
         top_k: 3,
       })
       const latest = await listWorkspaceExperiments(selectedWorkspaceId)
       setExperiments(latest.items)
       setSelectedRun(run)
+      setSelectedComparison(null)
       setActiveTab('experiments')
-      setNotice(`Experiment ${run.run_id} completed`)
+      setNotice(`Experiment ${run.run_id} completed with ${run.strategy}`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsRunningExperiment(false)
+    }
+  }
+
+  async function handleRunComparison() {
+    if (!selectedWorkspaceId) {
+      return
+    }
+
+    setIsRunningExperiment(true)
+    setNotice('')
+    try {
+      const comparison = await compareWorkspaceExperiments(selectedWorkspaceId, {
+        strategies: ['keyword', 'vector', 'hybrid'],
+        top_k: 3,
+      })
+      const latest = await listWorkspaceExperiments(selectedWorkspaceId)
+      setExperiments(latest.items)
+      setSelectedComparison(comparison)
+      setSelectedRun(null)
+      setActiveTab('experiments')
+      setNotice(`Comparison completed. Best strategy: ${comparison.best_strategy ?? 'n/a'}`)
     } catch (error) {
       setNotice(getErrorMessage(error))
     } finally {
@@ -351,6 +399,7 @@ function App() {
     try {
       const detail = await getWorkspaceExperiment(selectedWorkspaceId, runId)
       setSelectedRun(detail)
+      setSelectedComparison(null)
       setSelectedReport(null)
       setActiveTab('experiments')
     } catch (error) {
@@ -519,7 +568,7 @@ function App() {
                 isLoadingDocument={isLoadingDocument}
                 isUploadingDocument={isUploadingDocument}
                 onSelectDocument={(documentId) => selectDocument(selectedWorkspaceId, documentId)}
-                onUploadDocument={handleUploadDocument}
+                onUploadDocuments={handleUploadDocuments}
                 onDeleteDocument={handleDeleteDocument}
               />
             )}
@@ -527,6 +576,7 @@ function App() {
             {activeTab === 'golden' && (
               <GoldenTab
                 evalQuestions={evalQuestions}
+                invalidEvalCount={invalidEvalQuestions.length}
                 isUploadingEval={isUploadingEval}
                 onUploadEval={handleUploadEval}
                 onDeleteEvalQuestion={handleDeleteEvalQuestion}
@@ -537,8 +587,14 @@ function App() {
               <ExperimentsTab
                 experiments={experiments}
                 selectedRun={selectedRun}
+                selectedComparison={selectedComparison}
+                experimentStrategy={experimentStrategy}
+                evalQuestionCount={evalQuestions.length}
+                invalidEvalCount={invalidEvalQuestions.length}
                 isRunningExperiment={isRunningExperiment}
-                onRunKeywordExperiment={handleRunKeywordExperiment}
+                onExperimentStrategyChange={setExperimentStrategy}
+                onRunExperiment={handleRunExperiment}
+                onRunComparison={handleRunComparison}
                 onSelectExperiment={handleSelectExperiment}
                 onViewReport={handleViewReport}
               />
@@ -635,7 +691,7 @@ function DocumentsTab({
   isLoadingDocument,
   isUploadingDocument,
   onSelectDocument,
-  onUploadDocument,
+  onUploadDocuments,
   onDeleteDocument,
 }: {
   documents: DocumentSummary[]
@@ -644,7 +700,7 @@ function DocumentsTab({
   isLoadingDocument: boolean
   isUploadingDocument: boolean
   onSelectDocument: (documentId: string) => void
-  onUploadDocument: (file: File) => void
+  onUploadDocuments: (files: File[]) => void
   onDeleteDocument: (documentId: string) => void
 }) {
   return (
@@ -657,11 +713,12 @@ function DocumentsTab({
         <label className="upload">
           <input
             type="file"
+            multiple
             accept=".txt,.md"
             onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) {
-                onUploadDocument(file)
+              const selectedFiles = event.target.files ? Array.from(event.target.files) : []
+              if (selectedFiles.length > 0) {
+                onUploadDocuments(selectedFiles)
                 event.target.value = ''
               }
             }}
@@ -732,11 +789,13 @@ function DocumentsTab({
 
 function GoldenTab({
   evalQuestions,
+  invalidEvalCount,
   isUploadingEval,
   onUploadEval,
   onDeleteEvalQuestion,
 }: {
   evalQuestions: EvalQuestion[]
+  invalidEvalCount: number
   isUploadingEval: boolean
   onUploadEval: (file: File) => void
   onDeleteEvalQuestion: (questionId: string) => void
@@ -770,6 +829,11 @@ function GoldenTab({
           <Beaker size={17} />
           <h2>Golden Questions</h2>
         </div>
+        {invalidEvalCount > 0 && (
+          <p className="meta">
+            {invalidEvalCount} question(s) are missing expected chunk ids. Re-upload a fixed JSONL before running experiments.
+          </p>
+        )}
         {evalQuestions.length === 0 ? (
           <p className="meta">No golden questions yet.</p>
         ) : (
@@ -796,18 +860,32 @@ function GoldenTab({
 function ExperimentsTab({
   experiments,
   selectedRun,
+  selectedComparison,
+  experimentStrategy,
+  evalQuestionCount,
+  invalidEvalCount,
   isRunningExperiment,
-  onRunKeywordExperiment,
+  onExperimentStrategyChange,
+  onRunExperiment,
+  onRunComparison,
   onSelectExperiment,
   onViewReport,
 }: {
   experiments: ExperimentSummary[]
   selectedRun: ExperimentRunResponse | null
+  selectedComparison: ExperimentComparisonResponse | null
+  experimentStrategy: RetrievalStrategy
+  evalQuestionCount: number
+  invalidEvalCount: number
   isRunningExperiment: boolean
-  onRunKeywordExperiment: () => void
+  onExperimentStrategyChange: (value: RetrievalStrategy) => void
+  onRunExperiment: () => void
+  onRunComparison: () => void
   onSelectExperiment: (runId: string) => void
   onViewReport: (runId: string) => void
 }) {
+  const canRunExperiment = evalQuestionCount > 0 && invalidEvalCount === 0
+
   return (
     <section className="tab-layout">
       <section className="card">
@@ -815,11 +893,72 @@ function ExperimentsTab({
           <Sparkles size={17} />
           <h2>Run Evaluation</h2>
         </div>
-        <button className="btn primary" type="button" onClick={onRunKeywordExperiment} disabled={isRunningExperiment}>
-          {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Beaker size={15} />}
-          Run keyword baseline (top_k=3)
+        {!canRunExperiment && (
+          <p className="meta">
+            {evalQuestionCount === 0
+              ? 'Upload golden questions before running an experiment.'
+              : `${invalidEvalCount} golden question(s) still have invalid expected chunk ids.`}
+          </p>
+        )}
+        <div className="inline-form">
+          <select
+            value={experimentStrategy}
+            onChange={(event) => onExperimentStrategyChange(event.target.value as RetrievalStrategy)}
+          >
+            <option value="keyword">keyword</option>
+            <option value="vector">vector</option>
+            <option value="hybrid">hybrid</option>
+          </select>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={onRunExperiment}
+            disabled={isRunningExperiment || !canRunExperiment}
+          >
+            {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Beaker size={15} />}
+            Run experiment (top_k=3)
+          </button>
+        </div>
+        <button
+          className="btn secondary full"
+          type="button"
+          onClick={onRunComparison}
+          disabled={isRunningExperiment || !canRunExperiment}
+        >
+          {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Activity size={15} />}
+          Compare keyword / vector / hybrid
         </button>
       </section>
+
+      {selectedComparison && (
+        <section className="card">
+          <div className="card-title">
+            <Activity size={17} />
+            <h2>Strategy Comparison</h2>
+          </div>
+          <p className="meta">
+            Best: {selectedComparison.best_strategy ?? 'n/a'} | top_k={selectedComparison.top_k} |{' '}
+            {selectedComparison.created_at}
+          </p>
+          <div className="qa-list">
+            {selectedComparison.runs.map((run) => (
+              <article className="qa-item" key={run.run_id}>
+                <div className="row-between">
+                  <strong>{run.strategy}</strong>
+                  <button className="btn secondary" type="button" onClick={() => onSelectExperiment(run.run_id)}>
+                    Detail
+                  </button>
+                </div>
+                <p className="meta">
+                  hit@k {run.metrics.hit_at_k.toFixed(3)} | recall {run.metrics.recall_at_k.toFixed(3)} | precision{' '}
+                  {run.metrics.precision_at_k.toFixed(3)} | mrr {run.metrics.mrr.toFixed(3)} | latency{' '}
+                  {run.metrics.avg_latency_ms.toFixed(1)}ms
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="card-title">

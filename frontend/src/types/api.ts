@@ -108,6 +108,7 @@ export type ExperimentCaseResult = {
   question: string
   workspace_id: string
   top_k: number
+  notes: string
   expected_chunk_ids: string[]
   returned_chunk_ids: string[]
   relevant_count: number
@@ -147,4 +148,12 @@ export type ExperimentReportResponse = {
   run_id: string
   workspace_id: string
   markdown: string
+}
+
+export type ExperimentComparisonResponse = {
+  workspace_id: string
+  top_k: number
+  created_at: string
+  best_strategy: string | null
+  runs: ExperimentSummary[]
 }
