@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
 import re
@@ -40,6 +41,11 @@ class RetrievalEvalCaseResult:
     precision_at_k: float
     reciprocal_rank: float
     latency_ms: float
+    generated_answer: str = ""
+    reference_answer: str = ""
+    source_count: int = 0
+    answer_present: bool = False
+    answer_match_score: float = 0.0
 
 
 def evaluate_retrieval(
@@ -48,6 +54,11 @@ def evaluate_retrieval(
     chunks: list[dict] | None = None,
     relevance_mode: str = "chunk_id",
     retrieval_context_id: str | None = None,
+    query_transform: Callable[[RetrievalEvalCase], str] | None = None,
+    reranker: Callable[[str, list], list] | None = None,
+    context_builder: Callable[[str, list], list] | None = None,
+    answer_generator: Callable[[RetrievalEvalCase, str, list], str] | None = None,
+    retrieval_top_k: int | None = None,
 ) -> tuple[dict, list[RetrievalEvalCaseResult]]:
     if not cases:
         raise ValueError("At least one evaluation case is required")
@@ -64,15 +75,25 @@ def evaluate_retrieval(
 
     for case in cases:
         started_at = perf_counter()
+        retrieval_question = query_transform(case) if query_transform else case.question
+        requested_top_k = max(case.top_k, retrieval_top_k or case.top_k)
         retrieved = retrieve_relevant_chunks(
-            question=case.question,
-            top_k=case.top_k,
+            question=retrieval_question,
+            top_k=requested_top_k,
             workspace_id=case.workspace_id,
             strategy=strategy,
             chunks=chunks,
             retrieval_context_id=retrieval_context_id,
         )
+        if reranker:
+            retrieved.results = reranker(retrieval_question, retrieved.results)[: case.top_k]
+        elif len(retrieved.results) > case.top_k:
+            retrieved.results = retrieved.results[: case.top_k]
+        if context_builder:
+            retrieved.results = context_builder(retrieval_question, retrieved.results)[: case.top_k]
         latency_ms = (perf_counter() - started_at) * 1000.0
+        generated_answer = answer_generator(case, retrieval_question, retrieved.results) if answer_generator else ""
+        answer_match_score = _answer_match_score(generated_answer, case.reference_answer)
 
         returned_chunk_ids = [item.chunk_id for item in retrieved.results]
         returned_source_paths = [item.source_path for item in retrieved.results]
@@ -130,6 +151,11 @@ def evaluate_retrieval(
                 precision_at_k=precision_at_k,
                 reciprocal_rank=reciprocal_rank,
                 latency_ms=latency_ms,
+                generated_answer=generated_answer,
+                reference_answer=case.reference_answer,
+                source_count=len(retrieved.results),
+                answer_present=bool(generated_answer.strip()),
+                answer_match_score=answer_match_score,
             )
         )
 
@@ -277,6 +303,8 @@ def _token_set(text: str) -> set[str]:
 def _summarize_results(results: list[RetrievalEvalCaseResult]) -> dict:
     case_count = len(results)
     hit_count = sum(1 for result in results if result.hit)
+    answer_results = [result for result in results if result.generated_answer.strip()]
+    answer_reference_results = [result for result in results if result.reference_answer.strip()]
 
     return {
         "case_count": case_count,
@@ -286,6 +314,10 @@ def _summarize_results(results: list[RetrievalEvalCaseResult]) -> dict:
         "precision_at_k": _mean([result.precision_at_k for result in results]),
         "mrr": _mean([result.reciprocal_rank for result in results]),
         "avg_latency_ms": _mean([result.latency_ms for result in results]),
+        "answer_case_count": len(answer_results),
+        "answer_reference_case_count": len(answer_reference_results),
+        "answer_present_rate": len(answer_results) / case_count if case_count else 0.0,
+        "avg_answer_match_score": _mean([result.answer_match_score for result in answer_reference_results]),
     }
 
 
@@ -356,3 +388,17 @@ def _merged_interval_length(intervals: list[tuple[int, int]]) -> int:
 
 def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+def _answer_match_score(generated_answer: str, reference_answer: str) -> float:
+    if not generated_answer.strip() or not reference_answer.strip():
+        return 0.0
+
+    generated_tokens = _token_set(generated_answer)
+    reference_tokens = _token_set(reference_answer)
+    if not generated_tokens or not reference_tokens:
+        return 0.0
+
+    overlap = generated_tokens & reference_tokens
+    union = generated_tokens | reference_tokens
+    return len(overlap) / len(union) if union else 0.0

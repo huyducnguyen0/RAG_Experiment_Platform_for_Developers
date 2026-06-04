@@ -8,6 +8,10 @@ from app.services.retrieval_service import SUPPORTED_RETRIEVAL_STRATEGIES
 
 DEFAULT_RAG_STAGE = "retriever_evaluation"
 CHUNKING_RAG_STAGE = "chunking_evaluation"
+QUERY_TRANSFORM_RAG_STAGE = "query_transform_evaluation"
+RERANKER_RAG_STAGE = "reranker_evaluation"
+CONTEXT_BUILDER_RAG_STAGE = "context_builder_evaluation"
+ANSWER_EVALUATION_RAG_STAGE = "answer_evaluation"
 DEFAULT_TOP_K = 5
 
 
@@ -83,6 +87,54 @@ def list_rag_config_presets(workspace_id: str | None = None) -> list[RagConfigPr
             name="Hybrid keyword + vector",
             description="Combined lexical and semantic retrieval baseline.",
             strategy="hybrid",
+        ),
+        _build_query_transform_config(
+            config_id="cfg_query_transform_none",
+            name="Query transform none",
+            description="Use the retriever candidate exactly as-is with no query rewrite.",
+            transform_type="none",
+        ),
+        _build_query_transform_config(
+            config_id="cfg_query_transform_rewrite",
+            name="Query transform simple rewrite",
+            description="Apply a small rule-based rewrite that focuses the query on content terms.",
+            transform_type="rewrite",
+        ),
+        _build_reranker_config(
+            config_id="cfg_reranker_none",
+            name="Reranker none",
+            description="Keep retrieval order as-is with no reranking.",
+            reranker_type="none",
+        ),
+        _build_reranker_config(
+            config_id="cfg_reranker_overlap",
+            name="Reranker lexical overlap",
+            description="Rerank retrieved chunks by lexical overlap with the transformed query.",
+            reranker_type="lexical_overlap",
+        ),
+        _build_context_builder_config(
+            config_id="cfg_context_plain_top_k",
+            name="Context builder plain top-k",
+            description="Keep the final retrieved top-k chunks as the context baseline.",
+            context_builder_type="plain_top_k",
+        ),
+        _build_context_builder_config(
+            config_id="cfg_context_document_window",
+            name="Context builder document window",
+            description="Prefer nearby chunks from the same document to form a tighter local context window.",
+            context_builder_type="document_window",
+        ),
+        _build_answer_evaluation_config(
+            config_id="cfg_answer_grounded_mock",
+            name="Answer grounded mock",
+            description="Generate a grounded mock answer that summarizes the selected context.",
+            answer_generator_type="grounded_mock",
+        ),
+        _build_answer_evaluation_config(
+            config_id="cfg_answer_extract_then_mock",
+            name="Answer extract then mock",
+            description="Generate a mock answer that starts from the strongest retrieved chunk preview.",
+            answer_generator_type="extract_then_mock",
         ),
     ]
 
@@ -171,6 +223,7 @@ def _build_retriever_config(
         query_transform=RagConfigComponent(type="none"),
         reranker=RagConfigComponent(type="none"),
         context_builder=RagConfigComponent(type="plain_top_k"),
+        answer_generator=RagConfigComponent(type="none"),
     )
 
 
@@ -212,4 +265,149 @@ def _build_chunking_config(
         query_transform=RagConfigComponent(type="none"),
         reranker=RagConfigComponent(type="none"),
         context_builder=RagConfigComponent(type="plain_top_k"),
+        answer_generator=RagConfigComponent(type="none"),
+    )
+
+
+def _build_query_transform_config(
+    config_id: str,
+    name: str,
+    description: str,
+    transform_type: str,
+) -> RagConfigPreset:
+    return RagConfigPreset(
+        config_id=config_id,
+        name=name,
+        description=description,
+        rag_stage=QUERY_TRANSFORM_RAG_STAGE,
+        strategy="keyword",
+        top_k=DEFAULT_TOP_K,
+        chunking=RagConfigComponent(
+            type="fixed",
+            params={
+                "chunk_size": DEFAULT_CHUNK_SIZE,
+                "overlap": DEFAULT_OVERLAP,
+            },
+        ),
+        retriever=RagConfigComponent(
+            type="keyword",
+            params={
+                "top_k": DEFAULT_TOP_K,
+            },
+        ),
+        query_transform=RagConfigComponent(
+            type=transform_type,
+            params={},
+        ),
+        reranker=RagConfigComponent(type="none"),
+        context_builder=RagConfigComponent(type="plain_top_k"),
+        answer_generator=RagConfigComponent(type="none"),
+    )
+
+
+def _build_reranker_config(
+    config_id: str,
+    name: str,
+    description: str,
+    reranker_type: str,
+) -> RagConfigPreset:
+    return RagConfigPreset(
+        config_id=config_id,
+        name=name,
+        description=description,
+        rag_stage=RERANKER_RAG_STAGE,
+        strategy="keyword",
+        top_k=DEFAULT_TOP_K,
+        chunking=RagConfigComponent(
+            type="fixed",
+            params={
+                "chunk_size": DEFAULT_CHUNK_SIZE,
+                "overlap": DEFAULT_OVERLAP,
+            },
+        ),
+        retriever=RagConfigComponent(
+            type="keyword",
+            params={
+                "top_k": DEFAULT_TOP_K,
+            },
+        ),
+        query_transform=RagConfigComponent(type="none"),
+        reranker=RagConfigComponent(
+            type=reranker_type,
+            params={},
+        ),
+        context_builder=RagConfigComponent(type="plain_top_k"),
+        answer_generator=RagConfigComponent(type="none"),
+    )
+
+
+def _build_context_builder_config(
+    config_id: str,
+    name: str,
+    description: str,
+    context_builder_type: str,
+) -> RagConfigPreset:
+    return RagConfigPreset(
+        config_id=config_id,
+        name=name,
+        description=description,
+        rag_stage=CONTEXT_BUILDER_RAG_STAGE,
+        strategy="keyword",
+        top_k=DEFAULT_TOP_K,
+        chunking=RagConfigComponent(
+            type="fixed",
+            params={
+                "chunk_size": DEFAULT_CHUNK_SIZE,
+                "overlap": DEFAULT_OVERLAP,
+            },
+        ),
+        retriever=RagConfigComponent(
+            type="keyword",
+            params={
+                "top_k": DEFAULT_TOP_K,
+            },
+        ),
+        query_transform=RagConfigComponent(type="none"),
+        reranker=RagConfigComponent(type="none"),
+        context_builder=RagConfigComponent(
+            type=context_builder_type,
+            params={},
+        ),
+        answer_generator=RagConfigComponent(type="none"),
+    )
+
+
+def _build_answer_evaluation_config(
+    config_id: str,
+    name: str,
+    description: str,
+    answer_generator_type: str,
+) -> RagConfigPreset:
+    return RagConfigPreset(
+        config_id=config_id,
+        name=name,
+        description=description,
+        rag_stage=ANSWER_EVALUATION_RAG_STAGE,
+        strategy="keyword",
+        top_k=DEFAULT_TOP_K,
+        chunking=RagConfigComponent(
+            type="fixed",
+            params={
+                "chunk_size": DEFAULT_CHUNK_SIZE,
+                "overlap": DEFAULT_OVERLAP,
+            },
+        ),
+        retriever=RagConfigComponent(
+            type="keyword",
+            params={
+                "top_k": DEFAULT_TOP_K,
+            },
+        ),
+        query_transform=RagConfigComponent(type="none"),
+        reranker=RagConfigComponent(type="none"),
+        context_builder=RagConfigComponent(type="plain_top_k"),
+        answer_generator=RagConfigComponent(
+            type=answer_generator_type,
+            params={},
+        ),
     )

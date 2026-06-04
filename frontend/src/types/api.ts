@@ -139,6 +139,7 @@ export type RagConfigPreset = {
   query_transform: RagConfigComponent
   reranker: RagConfigComponent
   context_builder: RagConfigComponent
+  answer_generator: RagConfigComponent
 }
 
 export type RagConfigListResponse = {
@@ -221,6 +222,10 @@ export type ExperimentMetrics = {
   min_chunk_size: number
   max_chunk_size: number
   coverage_ratio: number
+  answer_case_count: number
+  answer_reference_case_count: number
+  answer_present_rate: number
+  avg_answer_match_score: number
 }
 
 export type ExperimentCaseResult = {
@@ -240,6 +245,11 @@ export type ExperimentCaseResult = {
   precision_at_k: number
   reciprocal_rank: number
   latency_ms: number
+  generated_answer: string
+  reference_answer: string
+  source_count: number
+  answer_present: boolean
+  answer_match_score: number
 }
 
 export type ExperimentRunResponse = {

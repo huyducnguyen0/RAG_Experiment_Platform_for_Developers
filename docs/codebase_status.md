@@ -92,6 +92,15 @@ Completed in this phase:
 - Content-overlap relevance mode for chunking evaluation so existing golden chunk ids can still be used as evidence anchors.
 - Retriever evaluation can read the latest kept chunking candidates and combine them with keyword/vector/hybrid retrievers.
 - Retriever phase artifacts store their parent chunking artifact id.
+- Query transform evaluation can read the latest kept retriever candidates and compare `none` vs simple rule-based `rewrite`.
+- Query transform phase artifacts store their parent retriever artifact id.
+- Reranker evaluation can read the latest kept query transform candidates and compare `none` vs simple lexical-overlap reranking.
+- Reranker phase artifacts store their parent query transform artifact id.
+- Context builder evaluation can read the latest kept reranker candidates and compare `plain_top_k` vs simple `document_window`.
+- Context builder phase artifacts store their parent reranker artifact id.
+- Answer evaluation can read the latest kept context builder candidates and compare grounded mock answer modes.
+- Answer evaluation runs store generated answer text, `reference_answer`, answer presence rate, and simple lexical overlap scoring.
+- Frontend run detail now includes a basic answer review panel for answer-evaluation runs.
 - Stable `question_id` in experiment case results.
 - Question-level comparison output for keyword/vector/hybrid wins and failures.
 - Frontend tabs for Documents, Golden Questions, Experiments, Reports, Playground.
@@ -102,14 +111,14 @@ Completed in this phase:
 Next recommended phase:
 
 ```text
-Phase Eval 7G - Query transform evaluation foundation
+Phase Eval 8B - Answer quality refinement and review tooling
 ```
 
 Goal of next phase:
 
-- Start modeling phase-specific experiment inputs.
-- Use the latest retriever artifact as the candidate pool for later query transform experiments.
-- Keep future query transform, reranker, context builder, and answer phases disabled until their logic exists.
+- Improve answer metrics beyond simple lexical overlap.
+- Add better review UX for generated answers, sources, and references.
+- Keep real LLM answer mode and judge mode optional until the retrieval/eval pipeline remains stable.
 
 ## Current Git Milestone
 

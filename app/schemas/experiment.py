@@ -32,6 +32,10 @@ class ExperimentMetrics(BaseModel):
     min_chunk_size: int = 0
     max_chunk_size: int = 0
     coverage_ratio: float = 0.0
+    answer_case_count: int = 0
+    answer_reference_case_count: int = 0
+    answer_present_rate: float = 0.0
+    avg_answer_match_score: float = 0.0
 
 
 class ExperimentCaseResult(BaseModel):
@@ -51,6 +55,11 @@ class ExperimentCaseResult(BaseModel):
     precision_at_k: float
     reciprocal_rank: float
     latency_ms: float
+    generated_answer: str = ""
+    reference_answer: str = ""
+    source_count: int = 0
+    answer_present: bool = False
+    answer_match_score: float = 0.0
 
 
 class ExperimentRunResponse(BaseModel):

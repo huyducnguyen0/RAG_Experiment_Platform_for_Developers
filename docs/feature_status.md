@@ -47,11 +47,12 @@ Legacy     = still available, not the main product flow
 | Chunking evaluation phase | Done | `app/services/chunking_service.py`, `app/services/experiment_service.py`, `app/services/evaluation_service.py` | Runs fixed, paragraph, and recursive chunking candidates with runtime chunks and content-overlap eval. |
 | Retriever evaluation from chunking artifacts | Done | `app/services/experiment_service.py`, `app/services/phase_artifact_service.py` | Uses latest kept `chunking_evaluation` candidates as input, combines them with keyword/vector/hybrid retrievers, and saves a parent-linked retriever artifact. |
 | Chunk statistics metrics | Done | `app/services/evaluation_service.py`, `app/schemas/experiment.py` | Adds chunk count, avg/min/max size, and coverage ratio to chunking runs. |
-| Query transform evaluation phase | Planned | none | Future multi-phase pipeline stage. |
-| Reranking | Planned | none | After retriever baseline and side-by-side failure analysis. |
-| Context builder evaluation phase | Planned | none | Future multi-phase pipeline stage. |
+| Query transform evaluation phase | Done | `app/services/experiment_service.py`, `app/services/rag_config_service.py`, `app/services/rag_phase_service.py`, `frontend/src/App.tsx` | Consumes latest kept retriever candidates, compares `none` vs simple rule-based `rewrite`, and persists a parent-linked query transform artifact. |
+| Reranker evaluation phase | Done | `app/services/experiment_service.py`, `app/services/evaluation_service.py`, `app/services/rag_config_service.py`, `app/services/rag_phase_service.py`, `frontend/src/App.tsx` | Consumes latest kept query transform candidates, compares `none` vs simple lexical-overlap reranking, overfetches before reranking, and persists a parent-linked reranker artifact. |
+| Context builder evaluation phase | Done | `app/services/experiment_service.py`, `app/services/evaluation_service.py`, `app/services/rag_config_service.py`, `app/services/rag_phase_service.py`, `frontend/src/App.tsx` | Consumes latest kept reranker candidates, compares `plain_top_k` vs simple `document_window`, and persists a parent-linked context builder artifact. |
 | Real LLM answer mode | Planned | `app/core/config.py` has `OPENAI_API_KEY`; `openai` dep exists | Do not add before retrieval/evaluation comparisons are useful. |
-| End-to-end answer evaluation | Planned | none | Final eval phase after retrieval loop is stable. |
+| End-to-end answer evaluation | Done | `app/services/experiment_service.py`, `app/services/evaluation_service.py`, `app/services/rag_config_service.py`, `app/services/rag_phase_service.py`, `frontend/src/App.tsx` | Consumes latest kept context-builder candidates, compares grounded mock answer modes, stores generated answers in run JSON, and adds basic answer metrics such as presence rate and lexical overlap with `reference_answer`. |
+| Answer review UI | Done | `frontend/src/App.tsx` | Run detail now shows per-question generated answer, reference answer, source count, and simple answer-match filtering for answer-evaluation runs. |
 | Agentic router | Planned | agent folders exist but not active in API | Future phase. |
 | Production DB | Planned | `app/database/session.py` exists but not used by MVP flow | Local JSON/file storage is current source of truth. |
 | Auth/user management | Planned | none | Out of MVP scope. |
@@ -77,7 +78,7 @@ Legacy     = still available, not the main product flow
 | Reports tab | Done | `frontend/src/App.tsx` | Shows selected Markdown report as preformatted text. |
 | Playground tab | Done | `frontend/src/App.tsx` | Calls workspace RAG mock query and shows sources. |
 | Per-question compare UI | Done | `frontend/src/App.tsx`, `frontend/src/index.css` | Shows question-level hit/miss, metrics, winner, and status filters. |
-| RAG phase selector UI | Done | `frontend/src/App.tsx`, `frontend/src/api/client.ts` | Shows active chunking/retriever phases and planned disabled future phases. |
+| RAG phase selector UI | Done | `frontend/src/App.tsx`, `frontend/src/api/client.ts` | Shows active chunking/retriever/query transform/reranker/context builder/answer phases. |
 | Chunking evaluation UI | Done | `frontend/src/App.tsx` | Phase selector can run chunking candidates and leaderboard shows chunking params. |
 | Report rendering polish | Partial | `frontend/src/App.tsx` | Currently raw Markdown in `<pre>`, not rich rendered. |
 

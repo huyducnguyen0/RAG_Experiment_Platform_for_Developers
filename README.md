@@ -4,7 +4,11 @@
 
 **RAG Experiment Platform for Developers** là một nền tảng giúp developer thử nghiệm, so sánh và đánh giá nhiều chiến lược RAG khác nhau trên cùng một bộ tài liệu và bộ câu hỏi kiểm thử.
 
+<<<<<<< HEAD
 Project này tập trung vào việc trả lời câu hỏi:
+=======
+Thay vì chỉ xây một chatbot RAG đơn giản, project này tập trung vào việc trả lời câu hỏi:
+>>>>>>> feature/rag
 
 > Với bộ dữ liệu cụ thể của developer, chiến lược RAG nào cho kết quả tốt nhất?
 

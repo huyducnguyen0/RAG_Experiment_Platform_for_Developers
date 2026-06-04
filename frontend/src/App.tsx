@@ -65,6 +65,7 @@ type QuestionComparisonFilter =
   | 'winner_keyword'
   | 'winner_vector'
   | 'winner_hybrid'
+type AnswerReviewFilter = 'all' | 'with_reference' | 'low_match' | 'high_match'
 
 const DEFAULT_RAG_CONFIG_ID = 'cfg_keyword_baseline'
 const DEFAULT_RAG_PHASE_ID = 'retriever_evaluation'
@@ -1038,9 +1039,14 @@ function ExperimentsTab({
   const phaseOptions = ragPhases.length > 0 ? ragPhases : fallbackRagPhaseOptions()
   const selectedPhase = findRagPhase(phaseOptions, selectedPhaseId)
   const [questionFilter, setQuestionFilter] = useState<QuestionComparisonFilter>('all')
+  const [answerReviewFilter, setAnswerReviewFilter] = useState<AnswerReviewFilter>('all')
   const questionComparisons = selectedComparison?.question_comparisons ?? []
   const visibleQuestionComparisons = questionComparisons.filter((row) =>
     matchesQuestionFilter(row, questionFilter),
+  )
+  const answerReviewResults = selectedRun?.results ?? []
+  const visibleAnswerReviewResults = answerReviewResults.filter((item) =>
+    matchesAnswerReviewFilter(item, answerReviewFilter),
   )
 
   return (
@@ -1379,23 +1385,82 @@ function ExperimentsTab({
       </section>
 
       {selectedRun && (
-        <section className="card">
-          <div className="card-title">
-            <Search size={17} />
-            <h2>Run Detail</h2>
-          </div>
-          <p className="meta">{selectedRun.run_id} | {selectedRun.created_at}</p>
-          <p className="meta">
-            {selectedRun.config_name || formatStrategyLabel(selectedRun.strategy)} |{' '}
-            {selectedRun.config_id || selectedRun.strategy} | {formatStageLabel(selectedRun.rag_stage || 'retriever_evaluation')}
-          </p>
-          <div className="count-grid">
-            <Stat label="Hit@k" value={selectedRun.metrics.hit_at_k.toFixed(3)} />
-            <Stat label="Recall@k" value={selectedRun.metrics.recall_at_k.toFixed(3)} />
-            <Stat label="Precision@k" value={selectedRun.metrics.precision_at_k.toFixed(3)} />
-            <Stat label="MRR" value={selectedRun.metrics.mrr.toFixed(3)} />
-          </div>
-        </section>
+        <>
+          <section className="card">
+            <div className="card-title">
+              <Search size={17} />
+              <h2>Run Detail</h2>
+            </div>
+            <p className="meta">{selectedRun.run_id} | {selectedRun.created_at}</p>
+            <p className="meta">
+              {selectedRun.config_name || formatStrategyLabel(selectedRun.strategy)} |{' '}
+              {selectedRun.config_id || selectedRun.strategy} | {formatStageLabel(selectedRun.rag_stage || 'retriever_evaluation')}
+            </p>
+            <div className="count-grid">
+              <Stat label="Hit@k" value={selectedRun.metrics.hit_at_k.toFixed(3)} />
+              <Stat label="Recall@k" value={selectedRun.metrics.recall_at_k.toFixed(3)} />
+              <Stat label="Precision@k" value={selectedRun.metrics.precision_at_k.toFixed(3)} />
+              <Stat label="MRR" value={selectedRun.metrics.mrr.toFixed(3)} />
+            </div>
+            {selectedRun.metrics.answer_case_count > 0 && (
+              <div className="count-grid">
+                <Stat label="Answer Cases" value={String(selectedRun.metrics.answer_case_count)} />
+                <Stat label="Ref Cases" value={String(selectedRun.metrics.answer_reference_case_count)} />
+                <Stat label="Present Rate" value={selectedRun.metrics.answer_present_rate.toFixed(3)} />
+                <Stat label="Answer Match" value={selectedRun.metrics.avg_answer_match_score.toFixed(3)} />
+              </div>
+            )}
+          </section>
+
+          {selectedRun.metrics.answer_case_count > 0 && (
+            <section className="card">
+              <div className="card-title">
+                <MessageSquare size={17} />
+                <h2>Answer Review</h2>
+              </div>
+              <div className="filter-row">
+                <select
+                  value={answerReviewFilter}
+                  onChange={(event) => setAnswerReviewFilter(event.target.value as AnswerReviewFilter)}
+                >
+                  <option value="all">All answers</option>
+                  <option value="with_reference">With reference</option>
+                  <option value="low_match">Low match (&lt; 0.20)</option>
+                  <option value="high_match">High match (&ge; 0.20)</option>
+                </select>
+                <span className="meta">
+                  {visibleAnswerReviewResults.length}/{answerReviewResults.length} cases
+                </span>
+              </div>
+              <div className="qa-list">
+                {visibleAnswerReviewResults.map((result) => (
+                  <article className="qa-item" key={`${selectedRun.run_id}-${result.question_id}`}>
+                    <div className="row-between">
+                      <strong>{result.question_id || result.question}</strong>
+                      <span className={`pill ${result.answer_match_score >= 0.2 ? 'hit' : 'miss'}`}>
+                        match {result.answer_match_score.toFixed(3)}
+                      </span>
+                    </div>
+                    <p>{result.question}</p>
+                    <p className="meta">
+                      sources={result.source_count} | hit={String(result.hit)} | recall={result.recall_at_k.toFixed(3)} | precision=
+                      {result.precision_at_k.toFixed(3)}
+                    </p>
+                    <p className="table-subtext">
+                      <strong>Generated:</strong> {result.generated_answer || '(none)'}
+                    </p>
+                    <p className="table-subtext">
+                      <strong>Reference:</strong> {result.reference_answer || '(none)'}
+                    </p>
+                    <p className="table-subtext">
+                      <strong>Returned chunks:</strong> {formatChunkIds(result.returned_chunk_ids)}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </section>
   )
@@ -1539,10 +1604,10 @@ function fallbackRagPhaseOptions(): RagPhase[] {
     buildFallbackRagPhase('baseline_sanity', 'Baseline Sanity', 'planned', false, 0),
     buildFallbackRagPhase('chunking_evaluation', 'Chunking Evaluation', 'active', true, 1),
     buildFallbackRagPhase('retriever_evaluation', 'Retriever Evaluation', 'active', true, 2),
-    buildFallbackRagPhase('query_transform_evaluation', 'Query Transform Evaluation', 'planned', false, 3),
-    buildFallbackRagPhase('reranker_evaluation', 'Reranker Evaluation', 'planned', false, 4),
-    buildFallbackRagPhase('context_builder_evaluation', 'Context Builder Evaluation', 'planned', false, 5),
-    buildFallbackRagPhase('answer_evaluation', 'End-to-End Answer Evaluation', 'planned', false, 6),
+    buildFallbackRagPhase('query_transform_evaluation', 'Query Transform Evaluation', 'active', true, 3),
+    buildFallbackRagPhase('reranker_evaluation', 'Reranker Evaluation', 'active', true, 4),
+    buildFallbackRagPhase('context_builder_evaluation', 'Context Builder Evaluation', 'active', true, 5),
+    buildFallbackRagPhase('answer_evaluation', 'End-to-End Answer Evaluation', 'active', true, 6),
   ]
 }
 
@@ -1606,6 +1671,34 @@ function fallbackRagConfigOptions(stage = DEFAULT_RAG_PHASE_ID): RagConfigPreset
     ]
   }
 
+  if (stage === 'query_transform_evaluation') {
+    return [
+      buildFallbackRagConfig('cfg_query_transform_none', 'Query transform none', 'keyword', stage),
+      buildFallbackRagConfig('cfg_query_transform_rewrite', 'Query transform simple rewrite', 'keyword', stage),
+    ]
+  }
+
+  if (stage === 'reranker_evaluation') {
+    return [
+      buildFallbackRagConfig('cfg_reranker_none', 'Reranker none', 'keyword', stage),
+      buildFallbackRagConfig('cfg_reranker_overlap', 'Reranker lexical overlap', 'keyword', stage),
+    ]
+  }
+
+  if (stage === 'context_builder_evaluation') {
+    return [
+      buildFallbackRagConfig('cfg_context_plain_top_k', 'Context builder plain top-k', 'keyword', stage),
+      buildFallbackRagConfig('cfg_context_document_window', 'Context builder document window', 'keyword', stage),
+    ]
+  }
+
+  if (stage === 'answer_evaluation') {
+    return [
+      buildFallbackRagConfig('cfg_answer_grounded_mock', 'Answer grounded mock', 'keyword', stage),
+      buildFallbackRagConfig('cfg_answer_extract_then_mock', 'Answer extract then mock', 'keyword', stage),
+    ]
+  }
+
   return [
     buildFallbackRagConfig('cfg_keyword_baseline', 'Keyword baseline', 'keyword'),
     buildFallbackRagConfig('cfg_vector_default', 'Vector semantic retrieval', 'vector'),
@@ -1621,6 +1714,20 @@ function buildFallbackRagConfig(
   chunkingParams: Record<string, number> = { chunk_size: 800, overlap: 100 },
   chunkingType = 'fixed',
 ): RagConfigPreset {
+  const queryTransformType =
+    stage === 'query_transform_evaluation' && configId.includes('rewrite') ? 'rewrite' : 'none'
+  const rerankerType =
+    stage === 'reranker_evaluation' && configId.includes('overlap') ? 'lexical_overlap' : 'none'
+  const contextBuilderType =
+    stage === 'context_builder_evaluation' && configId.includes('document_window')
+      ? 'document_window'
+      : 'plain_top_k'
+  const answerGeneratorType =
+    stage === 'answer_evaluation' && configId.includes('extract_then_mock')
+      ? 'extract_then_mock'
+      : stage === 'answer_evaluation'
+        ? 'grounded_mock'
+        : 'none'
   return {
     config_id: configId,
     name,
@@ -1630,9 +1737,10 @@ function buildFallbackRagConfig(
     top_k: 5,
     chunking: { type: chunkingType, params: chunkingParams },
     retriever: { type: strategy, params: { top_k: 5 } },
-    query_transform: { type: 'none', params: {} },
-    reranker: { type: 'none', params: {} },
-    context_builder: { type: 'plain_top_k', params: {} },
+    query_transform: { type: queryTransformType, params: {} },
+    reranker: { type: rerankerType, params: {} },
+    context_builder: { type: contextBuilderType, params: {} },
+    answer_generator: { type: answerGeneratorType, params: {} },
   }
 }
 
@@ -1689,6 +1797,22 @@ function matchesQuestionFilter(row: ExperimentQuestionComparisonRow, filter: Que
   return row.status === filter
 }
 
+function matchesAnswerReviewFilter(result: ExperimentRunResponse['results'][number], filter: AnswerReviewFilter) {
+  if (filter === 'all') {
+    return true
+  }
+  if (filter === 'with_reference') {
+    return result.reference_answer.trim().length > 0
+  }
+  if (filter === 'low_match') {
+    return result.answer_match_score < 0.2
+  }
+  if (filter === 'high_match') {
+    return result.answer_match_score >= 0.2
+  }
+  return true
+}
+
 function formatQuestionStatusLabel(status: string) {
   const labels: Record<string, string> = {
     all_failed: 'All failed',
@@ -1724,9 +1848,23 @@ function formatMetricPercent(value: number) {
 }
 
 function formatRagConfigDetails(config: RagConfigPreset) {
+  const queryTransform =
+    config.query_transform.type && config.query_transform.type !== 'none'
+      ? ` | query transform: ${config.query_transform.type}`
+      : ''
+  const reranker =
+    config.reranker.type && config.reranker.type !== 'none' ? ` | reranker: ${config.reranker.type}` : ''
+  const contextBuilder =
+    config.context_builder.type && config.context_builder.type !== 'plain_top_k'
+      ? ` | context builder: ${config.context_builder.type}`
+      : ''
+  const answerGenerator =
+    config.answer_generator.type && config.answer_generator.type !== 'none'
+      ? ` | answer: ${config.answer_generator.type}`
+      : ''
   return `chunking: ${formatChunkingDetails(config.chunking.type, config.chunking.params)} | retriever: ${
     config.retriever.type
-  }`
+  }${queryTransform}${reranker}${contextBuilder}${answerGenerator}`
 }
 
 function formatChunkingDetails(
