@@ -1,0 +1,293 @@
+import type {
+  DeleteEvalQuestionResponse,
+  DeleteDocumentResponse,
+  DeleteWorkspaceResponse,
+  DocumentDetail,
+  DocumentSummary,
+  EvalQuestionListResponse,
+  EvalQuestionUploadResponse,
+  ExperimentComparisonResponse,
+  ExperimentListResponse,
+  ExperimentReportResponse,
+  ExperimentRunResponse,
+  FolderUploadResponse,
+  HealthResponse,
+  PhaseArtifact,
+  PhaseArtifactListResponse,
+  RagConfigListResponse,
+  RagPhaseListResponse,
+  ResearchQueryRequest,
+  ResearchQueryResponse,
+  WorkspaceDetail,
+  WorkspaceSummary,
+} from '../types/api'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  return request('/health')
+}
+
+export async function listDocuments(): Promise<DocumentSummary[]> {
+  return request('/documents')
+}
+
+export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
+  return request('/workspaces')
+}
+
+export async function createWorkspace(name: string): Promise<WorkspaceDetail> {
+  return request('/workspaces', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function renameWorkspace(
+  workspaceId: string,
+  name: string,
+): Promise<WorkspaceDetail> {
+  return request(`/workspaces/${workspaceId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteWorkspace(workspaceId: string): Promise<DeleteWorkspaceResponse> {
+  return request(`/workspaces/${workspaceId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchDocument(documentId: string): Promise<DocumentDetail> {
+  return request(`/documents/${documentId}`)
+}
+
+export async function listWorkspaceDocuments(workspaceId: string): Promise<DocumentSummary[]> {
+  return request(`/workspaces/${workspaceId}/documents`)
+}
+
+export async function fetchWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+): Promise<DocumentDetail> {
+  return request(`/workspaces/${workspaceId}/documents/${documentId}`)
+}
+
+export async function uploadDocument(file: File): Promise<DocumentDetail> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request('/documents/upload', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function uploadWorkspaceDocument(
+  workspaceId: string,
+  file: File,
+): Promise<DocumentDetail> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request(`/workspaces/${workspaceId}/documents/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function uploadWorkspaceDocumentFolder(
+  workspaceId: string,
+  files: File[],
+): Promise<FolderUploadResponse> {
+  const formData = new FormData()
+  const relativePaths: string[] = []
+  for (const file of files) {
+    formData.append('files', file)
+    relativePaths.push(getFileRelativePath(file))
+  }
+  formData.append('relative_paths_json', JSON.stringify(relativePaths))
+
+  return request(`/workspaces/${workspaceId}/documents/upload-folder`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function deleteDocument(documentId: string): Promise<DeleteDocumentResponse> {
+  return request(`/documents/${documentId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function deleteWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+): Promise<DeleteDocumentResponse> {
+  return request(`/workspaces/${workspaceId}/documents/${documentId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function queryResearch(payload: ResearchQueryRequest): Promise<ResearchQueryResponse> {
+  return request('/research/query', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function queryWorkspaceResearch(
+  workspaceId: string,
+  payload: ResearchQueryRequest,
+): Promise<ResearchQueryResponse> {
+  return request(`/workspaces/${workspaceId}/research/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function uploadWorkspaceEvalQuestions(
+  workspaceId: string,
+  file: File,
+): Promise<EvalQuestionUploadResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request(`/workspaces/${workspaceId}/eval/questions/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export async function listWorkspaceEvalQuestions(
+  workspaceId: string,
+): Promise<EvalQuestionListResponse> {
+  return request(`/workspaces/${workspaceId}/eval/questions`)
+}
+
+export async function deleteWorkspaceEvalQuestion(
+  workspaceId: string,
+  questionId: string,
+): Promise<DeleteEvalQuestionResponse> {
+  return request(`/workspaces/${workspaceId}/eval/questions/${questionId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function listWorkspaceRagConfigs(
+  workspaceId: string,
+): Promise<RagConfigListResponse> {
+  return request(`/workspaces/${workspaceId}/rag-configs`)
+}
+
+export async function listWorkspaceRagPhases(
+  workspaceId: string,
+): Promise<RagPhaseListResponse> {
+  return request(`/workspaces/${workspaceId}/rag-phases`)
+}
+
+export async function listWorkspacePhaseArtifacts(
+  workspaceId: string,
+): Promise<PhaseArtifactListResponse> {
+  return request(`/workspaces/${workspaceId}/phase-artifacts`)
+}
+
+export async function getLatestWorkspacePhaseArtifact(
+  workspaceId: string,
+  phaseId?: string,
+): Promise<PhaseArtifact> {
+  const query = phaseId ? `?phase_id=${encodeURIComponent(phaseId)}` : ''
+  return request(`/workspaces/${workspaceId}/phase-artifacts/latest${query}`)
+}
+
+export async function runWorkspaceExperiment(
+  workspaceId: string,
+  payload: { strategy: string; config_id?: string; top_k: number; stage?: string },
+): Promise<ExperimentRunResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function compareWorkspaceExperiments(
+  workspaceId: string,
+  payload: {
+    strategies: string[]
+    config_ids?: string[]
+    top_k: number
+    stage: string
+    candidate_pool_size: number
+  },
+): Promise<ExperimentComparisonResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/compare`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function listWorkspaceExperiments(
+  workspaceId: string,
+): Promise<ExperimentListResponse> {
+  return request(`/workspaces/${workspaceId}/experiments`)
+}
+
+export async function getWorkspaceExperiment(
+  workspaceId: string,
+  runId: string,
+): Promise<ExperimentRunResponse> {
+  return request(`/workspaces/${workspaceId}/experiments/${runId}`)
+}
+
+export async function getWorkspaceReport(
+  workspaceId: string,
+  runId: string,
+): Promise<ExperimentReportResponse> {
+  return request(`/workspaces/${workspaceId}/reports/${runId}`)
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, init)
+
+  if (!response.ok) {
+    throw new Error(await getErrorDetail(response))
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function getErrorDetail(response: Response): Promise<string> {
+  try {
+    const body = await response.json()
+    if (typeof body.detail === 'string') {
+      return body.detail
+    }
+  } catch {
+    return `${response.status} ${response.statusText}`
+  }
+
+  return `${response.status} ${response.statusText}`
+}
+
+function getFileRelativePath(file: File) {
+  return file.webkitRelativePath || file.name
+}

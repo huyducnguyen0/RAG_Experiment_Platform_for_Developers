@@ -1,0 +1,183 @@
+4. Prompt đầu tiên cho Codex: bắt nó đọc context trước
+
+Mở Codex trong IDE, chọn project đúng folder, rồi gửi prompt này:
+
+Đọc toàn bộ context của project trước khi code:
+
+1. Đọc `AGENTS.md`
+2. Đọc `docs/project_checklist.md`
+3. Đọc `docs/current_phase.md`
+4. Đọc cấu trúc thư mục hiện tại
+5. Đọc các file Python chính nếu đã tồn tại
+
+Sau đó trả lời bằng tiếng Việt:
+
+- Project hiện tại đang ở phase nào?
+- Mục tiêu gần nhất là gì?
+- Những file nào hiện đã có?
+- Những file nào còn thiếu?
+- Bước nhỏ tiếp theo nên làm là gì?
+
+Chưa được sửa code ở prompt này.
+
+5. Prompt để Codex làm từng bước nhỏ
+
+Sau khi nó báo hiện trạng, dùng prompt kiểu này:
+
+Làm bước tiếp theo nhỏ nhất trong `docs/current_phase.md`.
+
+Yêu cầu:
+- Chỉ làm đúng bước hiện tại.
+- Không nhảy sang RAG, database, vector DB, frontend.
+- Trước khi sửa, nói rõ sẽ sửa file nào.
+- Sau khi sửa, giải thích từng file dùng để làm gì.
+- Đưa lệnh chạy bằng `uv`.
+- Đưa cách test trong browser hoặc Swagger UI.
+- Nếu có lỗi thường gặp, giải thích cách sửa.
+
+Nếu cần code, hãy chỉnh trực tiếp trong project.
+
+6. Prompt khi mày muốn nó dạy chậm hơn
+
+Dùng khi mày thấy nó giải thích nhanh quá:
+
+Giải thích lại bước vừa làm theo kiểu người mới tự học project thật.
+
+Format bắt buộc:
+
+1. Mục tiêu của bước này
+2. File nào được sửa
+3. Vì sao cần file đó
+4. Code chạy theo luồng nào khi user gọi API
+5. Lệnh chạy
+6. Cách kiểm tra đúng/sai
+7. Nếu lỗi thì debug từ đâu
+
+Không thêm feature mới.
+Không refactor thêm.
+Chỉ giải thích.
+7. Prompt khi mày muốn nó refactor
+
+Chỉ dùng sau khi code đã chạy:
+
+Code hiện tại đã chạy được. Bây giờ refactor cho sạch theo nguyên tắc:
+
+Make it work → Make it clean → Make it better
+
+Yêu cầu:
+- Không đổi behavior của API.
+- Chỉ tách code ra các file hợp lý.
+- Sau refactor, API cũ vẫn phải chạy y hệt.
+- Giải thích trước/sau refactor khác nhau như nào.
+- Đưa lệnh test lại.
+
+Ưu tiên tách:
+- route vào `app/api/`
+- schema vào `app/schemas/`
+- logic vào `app/services/`
+- config vào `app/core/` nếu cần
+8. Prompt khi gặp lỗi
+
+Khi terminal lỗi, copy nguyên lỗi và gửi:
+
+Tao gặp lỗi này khi chạy project:
+
+```bash
+PASTE_ERROR_HERE
+
+Hãy debug theo quy trình:
+
+Đọc lỗi từ trên xuống dưới.
+Chỉ ra dòng lỗi quan trọng nhất.
+Giải thích lỗi bằng tiếng Việt dễ hiểu.
+Chỉ ra nguyên nhân khả dĩ nhất trong project này.
+Đề xuất cách sửa nhỏ nhất.
+Nếu cần sửa code, chỉ sửa đúng phần gây lỗi.
+Sau khi sửa, đưa lệnh chạy lại.
+
+---
+
+# 9. Prompt để Codex không code hộ quá nhiều
+
+Vì mục tiêu của mày là học, không phải để nó làm hết. Dùng prompt này:
+
+```text
+Ở task này, đừng code ngay toàn bộ.
+
+Hãy hướng dẫn tao làm theo từng micro-step.
+
+Mỗi micro-step gồm:
+1. Mở file nào
+2. Thêm/sửa đoạn code nào
+3. Chạy lệnh gì
+4. Kết quả đúng là gì
+5. Tao học được khái niệm gì
+
+Sau mỗi micro-step thì dừng lại, đợi tao xác nhận rồi mới sang bước tiếp theo.
+
+Prompt này biến Codex thành gia sư thực hành.
+
+10. Prompt tổng cho cả project
+
+Mỗi lần mở session mới trong Codex, có thể dùng prompt này:
+
+Mày là mentor kỹ thuật cho project này.
+
+Trước khi làm gì:
+- Đọc `AGENTS.md`
+- Đọc `docs/project_checklist.md`
+- Đọc `docs/current_phase.md`
+- Kiểm tra cấu trúc thư mục hiện tại
+
+Cách làm:
+- Làm từng bước nhỏ.
+- Ưu tiên chạy được trước, sạch sau.
+- Không nhảy phase.
+- Không thêm công nghệ chưa cần.
+- Luôn giải thích bằng tiếng Việt.
+- Luôn đưa lệnh chạy và cách test.
+- Luôn nói rõ file nào được sửa và vì sao.
+
+Mục tiêu hiện tại:
+Hoàn thành phase hiện tại trong `docs/current_phase.md`.
+
+Bây giờ hãy phân tích trạng thái project hiện tại và đề xuất bước nhỏ tiếp theo. Chưa sửa code.
+11. Cách làm việc hằng ngày với Codex
+
+Mỗi buổi làm project, đi theo vòng này:
+
+1. Mở IDE tại đúng root project
+2. Mở Codex
+3. Gửi prompt đọc context
+4. Nó báo current phase
+5. Bảo nó làm đúng 1 checklist item
+6. Chạy lệnh test
+7. Nếu lỗi, gửi lỗi cho nó debug
+8. Khi chạy được, commit git
+9. Cập nhật checklist
+10. Sang item tiếp theo
+12. Ghi chu huong phat trien hien tai
+
+Khi lam tiep phan evaluation/experiment, bat Codex doc them:
+
+```text
+docs/rag_experiment_product_plan.md
+docs/rag_experiment_roadmap.md
+docs/evaluation.md
+```
+
+Huong san pham hien tai:
+
+```text
+Moi phase danh gia mot giai doan cua RAG:
+- chunking
+- retriever
+- query transform
+- reranker
+- context builder
+- final answer quality
+
+Khong cat top 5 qua som.
+Moi phase giu candidate pool rong, prune dan co kiem soat.
+Top 5 chi la final output cuoi cung.
+```
