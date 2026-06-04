@@ -10,7 +10,12 @@ import type {
   ExperimentListResponse,
   ExperimentReportResponse,
   ExperimentRunResponse,
+  FolderUploadResponse,
   HealthResponse,
+  PhaseArtifact,
+  PhaseArtifactListResponse,
+  RagConfigListResponse,
+  RagPhaseListResponse,
   ResearchQueryRequest,
   ResearchQueryResponse,
   WorkspaceDetail,
@@ -98,6 +103,24 @@ export async function uploadWorkspaceDocument(
   })
 }
 
+export async function uploadWorkspaceDocumentFolder(
+  workspaceId: string,
+  files: File[],
+): Promise<FolderUploadResponse> {
+  const formData = new FormData()
+  const relativePaths: string[] = []
+  for (const file of files) {
+    formData.append('files', file)
+    relativePaths.push(getFileRelativePath(file))
+  }
+  formData.append('relative_paths_json', JSON.stringify(relativePaths))
+
+  return request(`/workspaces/${workspaceId}/documents/upload-folder`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export async function deleteDocument(documentId: string): Promise<DeleteDocumentResponse> {
   return request(`/documents/${documentId}`, {
     method: 'DELETE',
@@ -164,9 +187,35 @@ export async function deleteWorkspaceEvalQuestion(
   })
 }
 
+export async function listWorkspaceRagConfigs(
+  workspaceId: string,
+): Promise<RagConfigListResponse> {
+  return request(`/workspaces/${workspaceId}/rag-configs`)
+}
+
+export async function listWorkspaceRagPhases(
+  workspaceId: string,
+): Promise<RagPhaseListResponse> {
+  return request(`/workspaces/${workspaceId}/rag-phases`)
+}
+
+export async function listWorkspacePhaseArtifacts(
+  workspaceId: string,
+): Promise<PhaseArtifactListResponse> {
+  return request(`/workspaces/${workspaceId}/phase-artifacts`)
+}
+
+export async function getLatestWorkspacePhaseArtifact(
+  workspaceId: string,
+  phaseId?: string,
+): Promise<PhaseArtifact> {
+  const query = phaseId ? `?phase_id=${encodeURIComponent(phaseId)}` : ''
+  return request(`/workspaces/${workspaceId}/phase-artifacts/latest${query}`)
+}
+
 export async function runWorkspaceExperiment(
   workspaceId: string,
-  payload: { strategy: string; top_k: number },
+  payload: { strategy: string; config_id?: string; top_k: number; stage?: string },
 ): Promise<ExperimentRunResponse> {
   return request(`/workspaces/${workspaceId}/experiments/run`, {
     method: 'POST',
@@ -179,7 +228,13 @@ export async function runWorkspaceExperiment(
 
 export async function compareWorkspaceExperiments(
   workspaceId: string,
-  payload: { strategies: string[]; top_k: number },
+  payload: {
+    strategies: string[]
+    config_ids?: string[]
+    top_k: number
+    stage: string
+    candidate_pool_size: number
+  },
 ): Promise<ExperimentComparisonResponse> {
   return request(`/workspaces/${workspaceId}/experiments/compare`, {
     method: 'POST',
@@ -231,4 +286,8 @@ async function getErrorDetail(response: Response): Promise<string> {
   }
 
   return `${response.status} ${response.statusText}`
+}
+
+function getFileRelativePath(file: File) {
+  return file.webkitRelativePath || file.name
 }

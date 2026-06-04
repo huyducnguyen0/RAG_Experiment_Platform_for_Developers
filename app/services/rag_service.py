@@ -7,7 +7,7 @@ SOURCE_PREVIEW_LENGTH = 180
 
 def answer_research_query(
     question: str,
-    top_k: int = 3,
+    top_k: int = 5,
     workspace_id: str | None = None,
 ) -> ResearchQueryResponse:
     retrieval = retrieve_relevant_chunks(

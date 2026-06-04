@@ -1,19 +1,30 @@
 # Restructure Plan - RAG Experiment Platform
 
-## Muc tieu
+## Muc Tieu
 
-Chuyen project tu huong "chat/notebook clone" sang "RAG Experiment Platform for Developers" voi quy trinh:
+Chuyen project tu huong chat/notebook clone sang RAG Experiment Platform for Developers voi quy trinh:
 
-documents + golden questions -> run experiments -> compare metrics -> recommend strategy
+```text
+documents + golden questions
+-> run RAG phase experiment
+-> compare metrics
+-> keep candidate pool
+-> inspect failures
+-> move candidates to next RAG phase
+-> export final top 5 configs
+```
 
-## Nguyen tac
+## Nguyen Tac
 
-- Khong dap di lam lai 1 lan.
+- Khong dap di lam lai mot lan.
 - Refactor theo tung phase nho, moi phase deu chay duoc.
 - Khong doi hanh vi endpoint dang on dinh neu phase do khong yeu cau.
 - Uu tien kha nang demo va benchmark co so lieu.
+- Khong cat top 5 qua som.
+- Top 5 chi la output cuoi cua toan bo pipeline.
+- Moi phase giu candidate pool rong hon, vi config yeu o phase rieng le co the manh khi ket hop voi module khac.
 
-## Kien truc backend de huong toi
+## Kien Truc Backend Huong Toi
 
 ```text
 app/
@@ -32,12 +43,16 @@ app/
 │   ├── document.py
 │   ├── retrieval.py
 │   ├── eval.py
-│   └── report.py
+│   ├── experiment.py
+│   └── rag_config.py
 ├── services/
 │   ├── workspace_service.py
 │   ├── document_service.py
 │   ├── chunking_service.py
 │   ├── evaluation_service.py
+│   ├── experiment_service.py
+│   ├── rag_config_service.py
+│   ├── metrics_service.py
 │   ├── rag_service.py
 │   └── retrieval/
 │       ├── keyword_retriever.py
@@ -52,7 +67,28 @@ app/
     └── logging.py
 ```
 
-## Cau truc data local persistent
+Do not create all of this at once. Add pieces only when the feature needs them.
+
+## Multi-Phase RAG Experiment Pipeline
+
+```text
+Phase 0 - Baseline sanity
+Phase 1 - Chunking evaluation
+Phase 2 - Retriever evaluation
+Phase 3 - Query transform evaluation
+Phase 4 - Reranker evaluation
+Phase 5 - Context builder evaluation
+Phase 6 - End-to-end answer evaluation
+Final   - Export top 5 RAG configs
+```
+
+Current implemented baseline:
+
+```text
+retriever_evaluation with keyword, vector, hybrid
+```
+
+## Local Persistent Data Huong Toi
 
 ```text
 data/
@@ -63,45 +99,62 @@ data/
         ├── chunks/
         ├── eval_sets/
         │   └── golden_questions.jsonl
+        ├── rag_configs/
+        │   └── presets.json
         ├── experiments/
         │   └── run_*.json
+        ├── candidate_pools/
+        │   └── {stage}.json
         └── reports/
             └── run_*.md
 ```
 
-## Mapping tu hien trang sang cau truc moi
+Current data layout does not yet have `rag_configs/` or `candidate_pools/`.
+
+## Mapping Tu Hien Trang Sang Cau Truc Moi
 
 1. Route
+
 - Giu cac route hien co dang chay.
-- Tach ro route theo domain: workspace/document/playground/eval/experiment/report.
+- Tach ro route theo domain khi file `workspaces.py` qua lon.
+- Them route cho `rag_configs` sau khi leaderboard/failure analysis on dinh.
 
 2. Service
+
 - `document_service`, `chunking_service`, `evaluation_service` giu va bo sung.
-- Retrieval doi sang strategy package (`services/retrieval/*`) de de benchmark.
+- `experiment_service` hien dang chua run/compare/leaderboard.
+- Them `rag_config_service.py` khi bat dau phase chunking/query/rerank.
+- Retrieval doi sang strategy package khi logic bat dau phinh to.
 
 3. Storage
-- Them lop `storage/repository.py` de gom doc/ghi file JSON.
-- Service khong truy cap file truc tiep nua sau khi migrate.
+
+- Chua them production DB.
+- Them repository/file store chi khi viec doc/ghi JSON bi lap lai nhieu.
+- Candidate pool persistence la buoc sau, khong phai buoc dau.
 
 4. Script
-- Script eval tiep tuc dung duoc trong luc migrate.
+
+- Script prepare/upload/eval tiep tuc dung duoc trong luc migrate.
 - Sau do goi chung qua service/repository.
 
-## Ke hoach migrate nho theo commit
+## Ke Hoach Migrate Nho Theo Commit
 
 1. Commit A - Product direction docs + current phase update
-2. Commit B - Eval report export (JSON + Markdown) hoan tat
-3. Commit C - Eval question APIs trong workspace
-4. Commit D - Experiment run/list/detail APIs
-5. Commit E - Frontend tabs: Golden Questions / Experiments / Reports
-6. Commit F - Vector strategy
-7. Commit G - Hybrid strategy
-8. Commit H - Rerank option
-9. Commit I - Recommendation logic + portfolio polish
+2. Commit B - Leaderboard output + candidate pool response
+3. Commit C - Add stable question_id to experiment results
+4. Commit D - Side-by-side per-question failure analysis
+5. Commit E - First-class rag_config presets
+6. Commit F - Chunking evaluation phase
+7. Commit G - Query transform evaluation phase
+8. Commit H - Reranker evaluation phase
+9. Commit I - Candidate pool persistence
+10. Commit J - Final answer evaluation foundation
 
-## Definition of Done cho giai doan restructure
+## Definition Of Done Cho Giai Doan Restructure
 
-- Luong "upload docs -> upload eval set -> run eval -> xem report" chay tron.
-- Co the so sanh it nhat 2 strategies.
-- Report co du metrics: hit@k, recall@k, precision@k, MRR, latency.
+- Luong upload docs -> upload eval set -> run eval -> xem leaderboard -> xem report chay tron.
+- Co the so sanh it nhat 3 retrieval candidates.
+- Leaderboard co rank, score, metrics, status.
+- Candidate pool duoc the hien ro tren UI.
+- Report/failure analysis giup debug tai sao candidate thang/thua.
 - Frontend phuc vu workflow benchmark, khong chi chat playground.

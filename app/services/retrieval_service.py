@@ -18,9 +18,11 @@ _INDEXED_WORKSPACE_SIGNATURES: dict[str, str] = {}
 
 def retrieve_relevant_chunks(
     question: str,
-    top_k: int = 3,
+    top_k: int = 5,
     workspace_id: str | None = None,
     strategy: str = "keyword",
+    chunks: list[dict] | None = None,
+    retrieval_context_id: str | None = None,
 ) -> RetrieveResponse:
     normalized_strategy = strategy.strip().lower()
     _validate_retrieval_strategy(normalized_strategy, original_strategy=strategy)
@@ -35,6 +37,8 @@ def retrieve_relevant_chunks(
             question=question,
             top_k=top_k,
             workspace_id=workspace_id,
+            chunks=chunks,
+            retrieval_context_id=retrieval_context_id,
         )
     if normalized_strategy == "hybrid":
         if workspace_id is None:
@@ -46,25 +50,37 @@ def retrieve_relevant_chunks(
             question=question,
             top_k=top_k,
             workspace_id=workspace_id,
+            chunks=chunks,
+            retrieval_context_id=retrieval_context_id,
         )
 
     return _retrieve_relevant_chunks_keyword(
         question=question,
         top_k=top_k,
         workspace_id=workspace_id,
+        chunks=chunks,
     )
 
 
-def prepare_retrieval_strategy(workspace_id: str, strategy: str) -> None:
+def prepare_retrieval_strategy(
+    workspace_id: str,
+    strategy: str,
+    chunks: list[dict] | None = None,
+    retrieval_context_id: str | None = None,
+) -> None:
     normalized_strategy = strategy.strip().lower()
     _validate_retrieval_strategy(normalized_strategy, original_strategy=strategy)
 
     if normalized_strategy not in {"vector", "hybrid"}:
         return
 
-    chunks = _collect_workspace_chunks(workspace_id)
-    if chunks:
-        _upsert_workspace_collection(workspace_id, chunks)
+    selected_chunks = chunks or _collect_workspace_chunks(workspace_id)
+    if selected_chunks:
+        _upsert_workspace_collection(
+            workspace_id=workspace_id,
+            chunks=selected_chunks,
+            retrieval_context_id=retrieval_context_id,
+        )
 
 
 def _validate_retrieval_strategy(normalized_strategy: str, original_strategy: str) -> None:
@@ -77,8 +93,9 @@ def _validate_retrieval_strategy(normalized_strategy: str, original_strategy: st
 
 def _retrieve_relevant_chunks_keyword(
     question: str,
-    top_k: int = 3,
+    top_k: int = 5,
     workspace_id: str | None = None,
+    chunks: list[dict] | None = None,
 ) -> RetrieveResponse:
     keywords = _extract_keywords(question)
     results: list[RetrievedChunk] = []
@@ -86,22 +103,27 @@ def _retrieve_relevant_chunks_keyword(
     if not keywords:
         return RetrieveResponse(query=question, results=[])
 
-    for document in _load_metadata(workspace_id):
-        for chunk in document.get("chunks", []):
-            score = _score_chunk(chunk["content"], keywords)
-            if score <= 0:
-                continue
+    selected_chunks = chunks or _collect_workspace_chunks(workspace_id)
+    for chunk in selected_chunks:
+        score = _score_chunk(chunk["content"], keywords)
+        if score <= 0:
+            continue
 
-            results.append(
-                RetrievedChunk(
-                    document_id=document["id"],
-                    document_title=document["title"],
-                    chunk_id=chunk["chunk_id"],
-                    chunk_index=chunk["chunk_index"],
-                    score=float(score),
-                    content=chunk["content"],
-                )
+        results.append(
+            RetrievedChunk(
+                document_id=chunk["document_id"],
+                document_title=chunk["document_title"],
+                chunk_id=chunk["chunk_id"],
+                chunk_index=chunk["chunk_index"],
+                score=float(score),
+                content=chunk["content"],
+                source_path=chunk.get("source_path", ""),
+                relative_path=chunk.get("relative_path", ""),
+                folder_path=chunk.get("folder_path", ""),
+                doc_type=chunk.get("doc_type", ""),
+                chunking_strategy=chunk.get("chunking_strategy", ""),
             )
+        )
 
     ranked_results = sorted(
         results,
@@ -116,21 +138,27 @@ def _retrieve_relevant_chunks_vector(
     question: str,
     top_k: int,
     workspace_id: str,
+    chunks: list[dict] | None = None,
+    retrieval_context_id: str | None = None,
 ) -> RetrieveResponse:
     question_text = question.strip()
     if not question_text:
         return RetrieveResponse(query=question, results=[])
 
-    chunks = _collect_workspace_chunks(workspace_id)
-    if not chunks:
+    selected_chunks = chunks or _collect_workspace_chunks(workspace_id)
+    if not selected_chunks:
         return RetrieveResponse(query=question, results=[])
 
-    collection = _upsert_workspace_collection(workspace_id, chunks)
+    collection = _upsert_workspace_collection(
+        workspace_id=workspace_id,
+        chunks=selected_chunks,
+        retrieval_context_id=retrieval_context_id,
+    )
     question_embedding = _embedding_model().encode([question_text])[0].tolist()
 
     query_result = collection.query(
         query_embeddings=[question_embedding],
-        n_results=min(top_k, len(chunks)),
+        n_results=min(top_k, len(selected_chunks)),
         include=["documents", "metadatas", "distances"],
     )
 
@@ -150,6 +178,11 @@ def _retrieve_relevant_chunks_vector(
                 chunk_index=int(metadata.get("chunk_index", 0)),
                 score=similarity,
                 content=content,
+                source_path=str(metadata.get("source_path", "")),
+                relative_path=str(metadata.get("relative_path", "")),
+                folder_path=str(metadata.get("folder_path", "")),
+                doc_type=str(metadata.get("doc_type", "")),
+                chunking_strategy=str(metadata.get("chunking_strategy", "")),
             )
         )
 
@@ -160,17 +193,22 @@ def _retrieve_relevant_chunks_hybrid(
     question: str,
     top_k: int,
     workspace_id: str,
+    chunks: list[dict] | None = None,
+    retrieval_context_id: str | None = None,
 ) -> RetrieveResponse:
     overfetch_k = max(top_k * 3, top_k)
     keyword_results = _retrieve_relevant_chunks_keyword(
         question=question,
         top_k=overfetch_k,
         workspace_id=workspace_id,
+        chunks=chunks,
     ).results
     vector_results = _retrieve_relevant_chunks_vector(
         question=question,
         top_k=overfetch_k,
         workspace_id=workspace_id,
+        chunks=chunks,
+        retrieval_context_id=retrieval_context_id,
     ).results
 
     combined_results = _combine_ranked_results(
@@ -206,6 +244,11 @@ def _combine_ranked_results(
             chunk_index=by_chunk_id[chunk_id].chunk_index,
             score=scores[chunk_id],
             content=by_chunk_id[chunk_id].content,
+            source_path=by_chunk_id[chunk_id].source_path,
+            relative_path=by_chunk_id[chunk_id].relative_path,
+            folder_path=by_chunk_id[chunk_id].folder_path,
+            doc_type=by_chunk_id[chunk_id].doc_type,
+            chunking_strategy=by_chunk_id[chunk_id].chunking_strategy,
         )
         for chunk_id in ranked_chunk_ids
     ]
@@ -222,17 +265,26 @@ def _collect_workspace_chunks(workspace_id: str) -> list[dict]:
                     "chunk_id": chunk["chunk_id"],
                     "chunk_index": chunk["chunk_index"],
                     "content": chunk["content"],
+                    "source_path": chunk.get("source_path", document.get("source_path", "")),
+                    "relative_path": chunk.get("relative_path", document.get("relative_path", "")),
+                    "folder_path": chunk.get("folder_path", document.get("folder_path", "")),
+                    "doc_type": chunk.get("doc_type", document.get("doc_type", "")),
+                    "chunking_strategy": chunk.get("chunking_strategy", "fixed"),
                 }
             )
     return chunks
 
 
-def _upsert_workspace_collection(workspace_id: str, chunks: list[dict]):
+def _upsert_workspace_collection(
+    workspace_id: str,
+    chunks: list[dict],
+    retrieval_context_id: str | None = None,
+):
     client = get_chroma_client()
-    collection_name = _collection_name(workspace_id)
+    collection_name = _collection_name(workspace_id, retrieval_context_id)
     chunks_signature = _workspace_chunks_signature(chunks)
 
-    if _INDEXED_WORKSPACE_SIGNATURES.get(workspace_id) == chunks_signature:
+    if _INDEXED_WORKSPACE_SIGNATURES.get(collection_name) == chunks_signature:
         return client.get_or_create_collection(name=collection_name)
 
     try:
@@ -250,6 +302,11 @@ def _upsert_workspace_collection(workspace_id: str, chunks: list[dict]):
             "document_id": chunk["document_id"],
             "document_title": chunk["document_title"],
             "chunk_index": chunk["chunk_index"],
+            "source_path": chunk.get("source_path", ""),
+            "relative_path": chunk.get("relative_path", ""),
+            "folder_path": chunk.get("folder_path", ""),
+            "doc_type": chunk.get("doc_type", ""),
+            "chunking_strategy": chunk.get("chunking_strategy", ""),
         }
         for chunk in chunks
     ]
@@ -262,7 +319,7 @@ def _upsert_workspace_collection(workspace_id: str, chunks: list[dict]):
             metadatas=metadatas,
             documents=documents,
         )
-        _INDEXED_WORKSPACE_SIGNATURES[workspace_id] = chunks_signature
+        _INDEXED_WORKSPACE_SIGNATURES[collection_name] = chunks_signature
     except Exception as error:
         raise HTTPException(
             status_code=500,
@@ -283,9 +340,13 @@ def _embedding_model() -> SentenceTransformer:
         ) from error
 
 
-def _collection_name(workspace_id: str) -> str:
+def _collection_name(workspace_id: str, retrieval_context_id: str | None = None) -> str:
     safe_workspace = re.sub(r"[^a-zA-Z0-9_-]", "_", workspace_id)
-    return f"{VECTOR_COLLECTION_PREFIX}{safe_workspace}"
+    if not retrieval_context_id:
+        return f"{VECTOR_COLLECTION_PREFIX}{safe_workspace}"
+
+    safe_context = re.sub(r"[^a-zA-Z0-9_-]", "_", retrieval_context_id)
+    return f"{VECTOR_COLLECTION_PREFIX}{safe_workspace}_{safe_context}"
 
 
 def _workspace_chunks_signature(chunks: list[dict]) -> str:
@@ -294,6 +355,9 @@ def _workspace_chunks_signature(chunks: list[dict]) -> str:
         digest.update(str(chunk["document_id"]).encode("utf-8"))
         digest.update(str(chunk["chunk_id"]).encode("utf-8"))
         digest.update(str(chunk["chunk_index"]).encode("utf-8"))
+        digest.update(str(chunk.get("source_path", "")).encode("utf-8"))
+        digest.update(str(chunk.get("doc_type", "")).encode("utf-8"))
+        digest.update(str(chunk.get("chunking_strategy", "")).encode("utf-8"))
         digest.update(str(len(chunk["content"])).encode("utf-8"))
         digest.update(chunk["content"].encode("utf-8"))
     return digest.hexdigest()

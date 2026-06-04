@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class RetrieveRequest(BaseModel):
     question: str
-    top_k: int = Field(default=3, ge=1, le=10)
+    top_k: int = Field(default=5, ge=1, le=10)
 
 
 class RetrievedChunk(BaseModel):
@@ -13,6 +13,11 @@ class RetrievedChunk(BaseModel):
     chunk_index: int
     score: float
     content: str
+    source_path: str = ""
+    relative_path: str = ""
+    folder_path: str = ""
+    doc_type: str = ""
+    chunking_strategy: str = ""
 
 
 class RetrieveResponse(BaseModel):
@@ -22,7 +27,7 @@ class RetrieveResponse(BaseModel):
 
 class ResearchQueryRequest(BaseModel):
     question: str
-    top_k: int = Field(default=3, ge=1, le=10)
+    top_k: int = Field(default=5, ge=1, le=10)
 
 
 class ResearchSource(BaseModel):

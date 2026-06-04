@@ -1,9 +1,12 @@
-from fastapi import APIRouter, File, UploadFile
+import json
+
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app.schemas.document import (
     DeleteDocumentResponse,
     DocumentDetail,
     DocumentSummary,
+    FolderUploadResponse,
 )
 from app.schemas.experiment import (
     ExperimentCompareRequest,
@@ -24,6 +27,9 @@ from app.schemas.research import (
     RetrieveRequest,
     RetrieveResponse,
 )
+from app.schemas.rag_config import RagConfigListResponse
+from app.schemas.rag_phase import RagPhaseListResponse
+from app.schemas.phase_artifact import PhaseArtifact, PhaseArtifactListResponse
 from app.schemas.workspace import (
     DeleteWorkspaceResponse,
     WorkspaceCreate,
@@ -36,6 +42,7 @@ from app.services.document_service import (
     get_document,
     list_documents,
     save_uploaded_document,
+    save_uploaded_folder_documents,
 )
 from app.services.eval_question_service import (
     delete_eval_question,
@@ -49,6 +56,13 @@ from app.services.experiment_service import (
     run_workspace_experiment_comparison,
     run_workspace_experiment,
 )
+from app.services.phase_artifact_service import (
+    get_latest_phase_artifact,
+    get_phase_artifact,
+    list_phase_artifacts,
+)
+from app.services.rag_config_service import list_rag_config_presets
+from app.services.rag_phase_service import list_rag_phases
 from app.services.rag_service import answer_research_query
 from app.services.retrieval_service import retrieve_relevant_chunks
 from app.services.workspace_service import (
@@ -98,6 +112,28 @@ def upload_workspace_document(
     return save_uploaded_document(file, workspace_id=workspace_id)
 
 
+@router.post("/{workspace_id}/documents/upload-folder", response_model=FolderUploadResponse)
+def upload_workspace_document_folder(
+    workspace_id: str,
+    files: list[UploadFile] = File(...),
+    relative_paths: list[str] = Form(default=[]),
+    relative_paths_json: str = Form(default=""),
+):
+    ensure_workspace_exists(workspace_id)
+    selected_relative_paths = relative_paths
+    if relative_paths_json:
+        try:
+            selected_relative_paths = json.loads(relative_paths_json)
+        except json.JSONDecodeError as error:
+            raise HTTPException(status_code=400, detail="relative_paths_json must be valid JSON") from error
+
+    return save_uploaded_folder_documents(
+        files=files,
+        relative_paths=selected_relative_paths,
+        workspace_id=workspace_id,
+    )
+
+
 @router.get("/{workspace_id}/documents", response_model=list[DocumentSummary])
 def get_workspace_documents(workspace_id: str):
     ensure_workspace_exists(workspace_id)
@@ -138,6 +174,45 @@ def query_workspace(workspace_id: str, request: ResearchQueryRequest):
         top_k=request.top_k,
         workspace_id=workspace_id,
     )
+
+
+@router.get("/{workspace_id}/rag-configs", response_model=RagConfigListResponse)
+def get_workspace_rag_configs(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    items = list_rag_config_presets(workspace_id=workspace_id)
+    return RagConfigListResponse(items=items, total=len(items))
+
+
+@router.get("/{workspace_id}/rag-phases", response_model=RagPhaseListResponse)
+def get_workspace_rag_phases(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    items = list_rag_phases(workspace_id=workspace_id)
+    return RagPhaseListResponse(items=items, total=len(items))
+
+
+@router.get("/{workspace_id}/phase-artifacts", response_model=PhaseArtifactListResponse)
+def get_workspace_phase_artifacts(workspace_id: str):
+    ensure_workspace_exists(workspace_id)
+    items = list_phase_artifacts(workspace_id=workspace_id)
+    return PhaseArtifactListResponse(items=items, total=len(items))
+
+
+@router.get("/{workspace_id}/phase-artifacts/latest", response_model=PhaseArtifact)
+def get_latest_workspace_phase_artifact(
+    workspace_id: str,
+    phase_id: str | None = Query(default=None),
+):
+    ensure_workspace_exists(workspace_id)
+    artifact = get_latest_phase_artifact(workspace_id=workspace_id, phase_id=phase_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Phase artifact not found")
+    return artifact
+
+
+@router.get("/{workspace_id}/phase-artifacts/{artifact_id}", response_model=PhaseArtifact)
+def get_workspace_phase_artifact(workspace_id: str, artifact_id: str):
+    ensure_workspace_exists(workspace_id)
+    return get_phase_artifact(workspace_id=workspace_id, artifact_id=artifact_id)
 
 
 @router.post(
@@ -186,6 +261,8 @@ def run_workspace_experiment_route(workspace_id: str, request: ExperimentRunRequ
     return run_workspace_experiment(
         workspace_id=workspace_id,
         strategy=request.strategy,
+        config_id=request.config_id,
+        stage=request.stage,
         top_k=request.top_k,
     )
 
@@ -199,7 +276,10 @@ def compare_workspace_experiments_route(workspace_id: str, request: ExperimentCo
     return run_workspace_experiment_comparison(
         workspace_id=workspace_id,
         strategies=request.strategies,
+        config_ids=request.config_ids,
         top_k=request.top_k,
+        stage=request.stage,
+        candidate_pool_size=request.candidate_pool_size,
     )
 
 

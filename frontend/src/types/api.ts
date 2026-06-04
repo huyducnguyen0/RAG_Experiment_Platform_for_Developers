@@ -7,9 +7,20 @@ export type DocumentChunk = {
   document_id: string
   chunk_index: number
   content: string
+  original_text: string
+  headline: string
+  summary: string
   start_index: number
   end_index: number
   content_length: number
+  source_path: string
+  relative_path: string
+  folder_path: string
+  doc_type: string
+  file_extension: string
+  chunking_strategy: string
+  chunk_size: number
+  chunk_overlap: number
 }
 
 export type DocumentSummary = {
@@ -18,6 +29,11 @@ export type DocumentSummary = {
   title: string
   file_name: string
   file_type: string
+  source_path: string
+  relative_path: string
+  folder_path: string
+  doc_type: string
+  file_extension: string
   content_length: number
   chunk_count: number
   created_at: string
@@ -31,6 +47,13 @@ export type DocumentDetail = DocumentSummary & {
 export type DeleteDocumentResponse = {
   deleted: boolean
   document_id: string
+}
+
+export type FolderUploadResponse = {
+  workspace_id: string
+  imported: number
+  skipped: number
+  documents: DocumentSummary[]
 }
 
 export type WorkspaceSummary = {
@@ -74,6 +97,11 @@ export type EvalQuestion = {
   question: string
   workspace_id: string
   expected_chunk_ids: string[]
+  reference_answer: string
+  keywords: string[]
+  category: string
+  gold_evidence_text: string
+  label_type: string
   top_k: number
   notes: string
 }
@@ -94,6 +122,92 @@ export type DeleteEvalQuestionResponse = {
   question_id: string
 }
 
+export type RagConfigComponent = {
+  type: string
+  params: Record<string, string | number | boolean>
+}
+
+export type RagConfigPreset = {
+  config_id: string
+  name: string
+  description: string
+  rag_stage: string
+  strategy: string
+  top_k: number
+  chunking: RagConfigComponent
+  retriever: RagConfigComponent
+  query_transform: RagConfigComponent
+  reranker: RagConfigComponent
+  context_builder: RagConfigComponent
+}
+
+export type RagConfigListResponse = {
+  items: RagConfigPreset[]
+  total: number
+}
+
+export type RagPhase = {
+  phase_id: string
+  name: string
+  description: string
+  status: string
+  enabled: boolean
+  order: number
+}
+
+export type RagPhaseListResponse = {
+  items: RagPhase[]
+  total: number
+}
+
+export type PhaseArtifactCandidate = {
+  rank: number
+  run_id: string
+  config_id: string
+  config_name: string
+  strategy: string
+  chunking_type: string
+  chunking_params: Record<string, string | number | boolean>
+  retriever_type: string
+  score: number
+  status: string
+  verdict: string
+  hit_at_k: number
+  recall_at_k: number
+  precision_at_k: number
+  mrr: number
+  avg_latency_ms: number
+  chunk_count: number
+  avg_chunk_size: number
+  min_chunk_size: number
+  max_chunk_size: number
+  coverage_ratio: number
+}
+
+export type PhaseArtifact = {
+  artifact_id: string
+  workspace_id: string
+  phase_id: string
+  parent_artifact_id: string | null
+  parent_phase_id: string | null
+  created_at: string
+  candidate_pool_size: number
+  total_candidates: number
+  kept_count: number
+  input_config_ids: string[]
+  kept_config_ids: string[]
+  pruned_config_ids: string[]
+  best_config_id: string | null
+  best_config_name: string | null
+  candidates: PhaseArtifactCandidate[]
+  summary: Record<string, unknown>
+}
+
+export type PhaseArtifactListResponse = {
+  items: PhaseArtifact[]
+  total: number
+}
+
 export type ExperimentMetrics = {
   case_count: number
   hit_count: number
@@ -102,15 +216,24 @@ export type ExperimentMetrics = {
   precision_at_k: number
   mrr: number
   avg_latency_ms: number
+  chunk_count: number
+  avg_chunk_size: number
+  min_chunk_size: number
+  max_chunk_size: number
+  coverage_ratio: number
 }
 
 export type ExperimentCaseResult = {
+  question_id: string
   question: string
   workspace_id: string
   top_k: number
   notes: string
   expected_chunk_ids: string[]
   returned_chunk_ids: string[]
+  returned_source_paths: string[]
+  returned_doc_types: string[]
+  label_type: string
   relevant_count: number
   hit: boolean
   recall_at_k: number
@@ -122,21 +245,29 @@ export type ExperimentCaseResult = {
 export type ExperimentRunResponse = {
   run_id: string
   workspace_id: string
+  config_id: string
+  config_name: string
+  rag_stage: string
   strategy: string
   top_k: number
   created_at: string
   metrics: ExperimentMetrics
   results: ExperimentCaseResult[]
   report_markdown_path: string
+  rag_config: RagConfigPreset | null
 }
 
 export type ExperimentSummary = {
   run_id: string
   workspace_id: string
+  config_id: string
+  config_name: string
+  rag_stage: string
   strategy: string
   top_k: number
   created_at: string
   metrics: ExperimentMetrics
+  rag_config: RagConfigPreset | null
 }
 
 export type ExperimentListResponse = {
@@ -150,10 +281,66 @@ export type ExperimentReportResponse = {
   markdown: string
 }
 
+export type ExperimentLeaderboardRow = {
+  rank: number
+  run_id: string
+  config_id: string
+  config_name: string
+  rag_stage: string
+  strategy: string
+  metrics: ExperimentMetrics
+  score: number
+  status: string
+  verdict: string
+  rag_config: RagConfigPreset | null
+}
+
+export type ExperimentStrategyQuestionResult = {
+  config_id: string
+  config_name: string
+  strategy: string
+  run_id: string
+  hit: boolean
+  returned_chunk_ids: string[]
+  relevant_count: number
+  recall_at_k: number
+  precision_at_k: number
+  reciprocal_rank: number
+  latency_ms: number
+}
+
+export type ExperimentQuestionComparisonRow = {
+  question_id: string
+  question: string
+  expected_chunk_ids: string[]
+  notes: string
+  winner: string | null
+  status: string
+  strategy_results: ExperimentStrategyQuestionResult[]
+}
+
+export type ExperimentComparisonSummary = {
+  stage: string
+  total_configs: number
+  candidate_pool_size: number
+  kept_count: number
+  best_config_id: string | null
+  best_config_name: string | null
+  fastest_config_name: string | null
+  highest_recall_config_name: string | null
+  recommendation: string
+}
+
 export type ExperimentComparisonResponse = {
   workspace_id: string
+  stage: string
   top_k: number
   created_at: string
   best_strategy: string | null
+  summary: ExperimentComparisonSummary
+  phase_artifact: PhaseArtifact | null
+  leaderboard: ExperimentLeaderboardRow[]
+  rag_configs: RagConfigPreset[]
+  question_comparisons: ExperimentQuestionComparisonRow[]
   runs: ExperimentSummary[]
 }

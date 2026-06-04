@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-Last updated: 2026-05-29
+Last updated: 2026-06-03
 
 ## System Shape
 
@@ -14,14 +14,30 @@ The main product loop is:
 
 ```text
 Create workspace
--> Upload documents
+-> Upload documents or corpus folder
 -> Auto chunk documents
 -> Upload golden questions
--> Run keyword experiment
--> Store JSON run result
--> Store Markdown report
--> View results in frontend
+-> Run retrieval experiments
+-> Compare candidates in a leaderboard
+-> Keep candidate pool
+-> Persist phase artifact
+-> Inspect reports and failure cases
 ```
+
+The long-term product loop is multi-phase:
+
+```text
+Baseline sanity
+-> Chunking evaluation
+-> Retriever evaluation
+-> Query transform evaluation
+-> Reranker evaluation
+-> Context builder evaluation
+-> End-to-end answer evaluation
+-> Final top 5 RAG configs
+```
+
+Top 5 is final output only. During the intermediate phases, the system should keep a wider candidate pool and prune gradually.
 
 ## Backend Layers
 
@@ -54,7 +70,7 @@ Current route organization:
 - `chat.py`: mock chat.
 - `documents.py`: legacy/global document APIs.
 - `research.py`: legacy/global retrieve/query APIs.
-- `workspaces.py`: primary product APIs, including workspace documents, eval questions, experiments, reports.
+- `workspaces.py`: primary product APIs, including workspace documents, eval questions, experiments, compare, reports.
 
 Important note:
 
@@ -85,7 +101,8 @@ Important schemas:
 - `document.py`: document summary/detail/chunk.
 - `research.py`: retrieve/query response and sources.
 - `eval.py`: golden question upload/list/delete responses.
-- `experiment.py`: experiment request, metrics, results, reports.
+- `experiment.py`: experiment request, metrics, results, reports, comparison summary, leaderboard rows.
+- `phase_artifact.py`: persisted candidate-pool artifact for a RAG phase.
 - `chat.py`: basic chat request/response.
 
 ### Services
@@ -99,14 +116,16 @@ app/services/
 Main service responsibilities:
 
 - `workspace_service.py`: workspace index, create/list/get/rename/delete.
-- `document_service.py`: upload, validate, persist document metadata/content.
-- `chunking_service.py`: character chunking with overlap.
-- `retrieval_service.py`: keyword retrieval.
+- `document_service.py`: upload files/folders, validate, infer corpus metadata, persist document metadata/content.
+- `chunking_service.py`: fixed, paragraph, and recursive character chunking.
+- `retrieval_service.py`: keyword, vector, and hybrid retrieval.
 - `rag_service.py`: retrieve context + build mock RAG response with sources.
 - `ai_service.py`: mock answer text generation.
-- `eval_question_service.py`: upload/list/delete JSONL golden questions.
+- `eval_question_service.py`: upload/list/delete JSONL golden questions and repair missing ids when possible.
 - `evaluation_service.py`: compute retrieval metrics.
-- `experiment_service.py`: run keyword baseline, save JSON and Markdown reports.
+- `experiment_service.py`: run experiments, save JSON/Markdown reports, build comparison leaderboard.
+- `phase_artifact_service.py`: save/list/load candidate pools as phase artifacts.
+- `chunking_service.py`: default upload chunking plus runtime chunking candidates for chunking evaluation.
 
 ## Frontend Architecture
 
@@ -131,6 +150,21 @@ Current tabs:
 - Reports
 - Playground
 
+The Experiments tab now supports:
+
+- single strategy run
+- keyword/vector/hybrid comparison
+- fixed/paragraph/recursive chunking comparison
+- RAG phase leaderboard table
+- candidate pool summary
+- latest persisted phase artifact
+
+The Documents tab now supports:
+
+- single file upload
+- nested folder/corpus upload
+- source path, folder path, and doc type metadata display
+
 Frontend API base:
 
 ```text
@@ -153,6 +187,10 @@ Document
 - title
 - file_name
 - file_type
+- source_path
+- relative_path
+- folder_path
+- doc_type
 - content_length
 - chunk_count
 - chunks
@@ -164,6 +202,12 @@ Chunk
 - document_id
 - chunk_index
 - content
+- original_text
+- headline
+- summary
+- source_path
+- doc_type
+- chunking_strategy
 - start_index
 - end_index
 - content_length
@@ -185,14 +229,53 @@ ExperimentRun
 - metrics
 - results
 - report_markdown_path
+
+ExperimentComparison
+- workspace_id
+- stage
+- top_k
+- best_strategy
+- summary
+- phase_artifact
+- leaderboard
+- runs
+
+LeaderboardRow
+- rank
+- config_id
+- config_name
+- rag_stage
+- strategy
+- metrics
+- score
+- status
+- verdict
+
+PhaseArtifact
+- artifact_id
+- workspace_id
+- phase_id
+- candidate_pool_size
+- kept_config_ids
+- pruned_config_ids
+- candidates
 ```
 
 ## Retrieval and Evaluation Details
 
-Current retrieval:
+Current retrieval strategies:
 
 ```text
-question -> lowercase alphanumeric keywords -> count keyword occurrences per chunk -> sort by score -> top_k
+keyword
+vector
+hybrid
+```
+
+Current comparison stages:
+
+```text
+chunking_evaluation
+retriever_evaluation
 ```
 
 Current metrics:
@@ -203,38 +286,32 @@ Current metrics:
 - `mrr`
 - `avg_latency_ms`
 
-Current experiment strategy:
+Current leaderboard score is a simple weighted retrieval score:
 
 ```text
-keyword
+0.40 * hit_at_k
++ 0.30 * mrr
++ 0.20 * recall_at_k
++ 0.10 * precision_at_k
+- 0.10 * normalized_latency
 ```
 
-Unsupported strategies currently return HTTP 400.
+This score is for MVP ranking only. It can be revised when more RAG phases exist.
 
 ## Recommended Next Refactors
 
 Keep these small and separate:
 
-1. Split `workspaces.py` route file after vector strategy works.
-2. Add retrieval strategy interface:
-
-```text
-retrieve(strategy, question, workspace_id, top_k)
-```
-
-3. Move keyword retriever into:
-
-```text
-app/services/retrieval/keyword_retriever.py
-```
-
-4. Add vector retriever without deleting keyword baseline.
-5. Add compare UI after at least two strategies exist.
+1. Add chunking evaluation phase candidates.
+2. Add cross-phase candidate selection from phase artifacts.
+3. Split `workspaces.py` route file after behavior is stable.
+4. Move retrieval strategies into a package after the interfaces settle.
 
 ## Things To Avoid Next
 
 - Do not jump to auth.
 - Do not add production database yet.
 - Do not remove keyword baseline.
-- Do not make frontend the main complexity center before vector eval exists.
+- Do not cut directly to top 5 in intermediate phases.
 - Do not wire real LLM calls before retrieval/evaluation comparisons are useful.
+- Do not start GraphRAG or Agentic RAG before the multi-phase eval pipeline is stable.

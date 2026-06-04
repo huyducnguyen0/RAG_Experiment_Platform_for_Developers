@@ -797,7 +797,7 @@ Evaluate whether retrieval and answers are actually good.
 ### 1. Eval 1 - Golden Dataset Preparation
 
 - [ ] Create workspace-scoped evaluation dataset format.
-- [ ] Define JSONL schema with `question`, `expected_chunk_ids`, `top_k`, and `notes`.
+- [ ] Define flexible eval dataset schema for JSONL/CSV with `question` plus optional `expected_chunk_ids`, `gold_evidence_text`, `reference_answer`, `keywords`, `category`, and `top_k`.
 - [ ] Prepare sample documents that can actually be uploaded into the current platform.
 - [ ] Prepare a `golden_questions` template file for upload.
 - [x] Add helper files/scripts so chunk id mapping is not fully manual.
@@ -843,9 +843,31 @@ Evaluate whether retrieval and answers are actually good.
 - [x] Add `hybrid` as a combined keyword + vector strategy.
 - [x] Run the same golden set on multiple strategies.
 - [x] Compare metric differences across runs.
-- [ ] Identify failure cases where one strategy helps and the other fails.
+- [x] Show a leaderboard-style output with rank, score, and candidate-pool status.
+- [x] Identify failure cases where one strategy helps and the other fails.
 
-### 7. Eval 7 - Answer Evaluation Later
+### 7. Eval 7 - Multi-Phase RAG Experiment Pipeline
+
+- [x] Document the product direction: each phase evaluates one RAG stage.
+- [x] Treat top 5 as final output, not an early pruning rule.
+- [x] Add candidate pool concept to comparison output.
+- [x] Add stable `question_id` to every experiment result.
+- [x] Add side-by-side per-question comparison.
+- [x] Add first-class `rag_config` presets.
+- [x] Add phase selector UI.
+- [x] Persist candidate pools as phase artifacts.
+- [x] Add chunking evaluation phase.
+- [x] Add recursive character chunking candidates.
+- [x] Add folder/corpus upload for `.txt` and `.md` files.
+- [x] Preserve source path, folder path, and doc type metadata.
+- [x] Add chunk statistics metrics for chunking evaluation.
+- [x] Add retriever evaluation phase beyond the current baseline MVP.
+- [ ] Add query transform evaluation phase.
+- [ ] Add reranker evaluation phase.
+- [ ] Add context builder evaluation phase.
+- [ ] Add final end-to-end answer evaluation phase.
+
+### 8. Eval 8 - Answer Evaluation Later
 
 - [ ] Use simple manual review first.
 - [ ] Add answer-level evaluation after retrieval loop is stable.

@@ -156,3 +156,28 @@ Mỗi buổi làm project, đi theo vòng này:
 8. Khi chạy được, commit git
 9. Cập nhật checklist
 10. Sang item tiếp theo
+12. Ghi chu huong phat trien hien tai
+
+Khi lam tiep phan evaluation/experiment, bat Codex doc them:
+
+```text
+docs/rag_experiment_product_plan.md
+docs/rag_experiment_roadmap.md
+docs/evaluation.md
+```
+
+Huong san pham hien tai:
+
+```text
+Moi phase danh gia mot giai doan cua RAG:
+- chunking
+- retriever
+- query transform
+- reranker
+- context builder
+- final answer quality
+
+Khong cat top 5 qua som.
+Moi phase giu candidate pool rong, prune dan co kiem soat.
+Top 5 chi la final output cuoi cung.
+```

@@ -1,27 +1,60 @@
-# System Map (Mental Model)
+# System Map
 
-Muc tieu cua file nay: cho phep nhin du an bang "so do" thay vi doc tung file.
-No tap trung vao flow dang chay (workspace-first + keyword baseline + reports).
+Muc tieu cua file nay: cho phep nhin du an bang so do thay vi doc tung file.
+No tap trung vao flow dang chay: workspace-first + retrieval comparison + leaderboard + candidate pool.
 
-## 1) Product Loop (dang dung)
+## 1) Product Loop Hien Tai
 
 ```mermaid
 flowchart TD
-  A[Create workspace] --> B[Upload documents .txt/.md]
+  A[Create workspace] --> B[Upload documents or corpus folder .txt/.md]
   B --> C[Auto chunking]
   C --> D[Upload golden_questions.jsonl]
-  D --> E[Run experiment: keyword]
-  E --> F[Save run JSON]
-  E --> G[Save report Markdown]
-  F --> H[View in frontend]
-  G --> H
-  C --> I[Playground: query workspace]
-  I --> H
+  D --> C1[Run chunking evaluation]
+  D --> E[Run single strategy experiment]
+  D --> F[Compare keyword/vector/hybrid]
+  C1 --> I[Build leaderboard]
+  C1 --> A1[Save phase artifact JSON]
+  E --> G[Save run JSON]
+  E --> H[Save report Markdown]
+  F --> I[Build leaderboard]
+  F --> J[Return candidate pool status]
+  F --> A1[Save phase artifact JSON]
+  G --> K[View in frontend]
+  H --> K
+  I --> K
+  J --> K
+  A1 --> K
+  C --> L[Playground: query workspace]
+  L --> K
 ```
 
-## 2) Backend Request Flow (layering)
+## 2) Product Loop Huong Toi
+
+```mermaid
+flowchart TD
+  A[Baseline sanity] --> B[Chunking evaluation]
+  B --> C[Keep chunking candidate pool]
+  C --> D[Retriever evaluation]
+  D --> E[Keep retriever candidate pool]
+  E --> F[Query transform evaluation]
+  F --> G[Reranker evaluation]
+  G --> H[Context builder evaluation]
+  H --> I[End-to-end answer evaluation]
+  I --> J[Export final top 5 RAG configs]
+```
+
+Nguyen tac:
+
+```text
+Top 5 chi la output cuoi.
+Moi phase giu candidate pool rong roi prune dan co kiem soat.
+```
+
+## 3) Backend Request Flow
 
 Quy uoc:
+
 - Route: nhan HTTP request, validate schema
 - Service: xu ly logic, doc/ghi file local
 - Storage: hien tai nam trong `data/` (khong co DB)
@@ -29,12 +62,12 @@ Quy uoc:
 ```mermaid
 flowchart LR
   FE[Frontend React] -->|HTTP JSON| API[FastAPI routes]
-  API --> SCH[Schemas (Pydantic)]
+  API --> SCH[Schemas Pydantic]
   API --> SVC[Services]
-  SVC --> FS[Local file storage: data/workspaces/*]
+  SVC --> FS[Local file storage data/workspaces/*]
 ```
 
-## 3) Workspace API Map (primary)
+## 4) Workspace API Map
 
 File route chinh: `app/api/routes/workspaces.py`
 
@@ -66,32 +99,41 @@ flowchart TD
     Q3[DELETE /workspaces/{id}/eval/questions/{q_id}] --> QSVC3[eval_question_service.delete_eval_question]
   end
 
-  subgraph EXP[Experiments + Reports]
+  subgraph EXP[Experiments + Compare + Reports]
     X1[POST /workspaces/{id}/experiments/run] --> XSVC[experiment_service.run_workspace_experiment]
-    X2[GET /workspaces/{id}/experiments] --> XSVC2[experiment_service.list_workspace_experiments]
-    X3[GET /workspaces/{id}/experiments/{run_id}] --> XSVC3[experiment_service.get_workspace_experiment]
-    X4[GET /workspaces/{id}/reports/{run_id}] --> XSVC4[experiment_service.get_workspace_report_markdown]
+    X2[POST /workspaces/{id}/experiments/compare] --> XCOMP[experiment_service.run_workspace_experiment_comparison]
+    X3[GET /workspaces/{id}/experiments] --> XSVC2[experiment_service.list_workspace_experiments]
+    X4[GET /workspaces/{id}/experiments/{run_id}] --> XSVC3[experiment_service.get_workspace_experiment]
+    X5[GET /workspaces/{id}/reports/{run_id}] --> XSVC4[experiment_service.get_workspace_report_markdown]
   end
 ```
 
-## 4) Retrieval + RAG (hien tai)
+## 5) Retrieval + Comparison
 
-Hien tai:
-- Retrieval: keyword-only (khong vector)
-- RAG: mock answer (khong goi LLM that)
+Current retrieval candidates:
+
+```text
+chunking_evaluation: fixed 500, fixed 800, fixed 1200, paragraph 1000, recursive 500/800/1000
+retriever_evaluation:
+keyword
+vector
+hybrid
+```
 
 ```mermaid
 flowchart TD
-  U[Question] --> K[_extract_keywords()]
-  K --> S[Score chunks by count()]
-  S --> Top[Top-k RetrievedChunks]
-  Top --> Src[ResearchSource list + preview]
-  Src --> Ctx[Build context text]
-  Ctx --> Mock[ai_service.generate_mock_answer]
-  Mock --> Resp[Return answer + sources]
+  U[Golden question] --> S{Strategy}
+  S --> K[Keyword retrieval]
+  S --> V[Vector retrieval]
+  S --> H[Hybrid retrieval]
+  K --> M[Compute metrics]
+  V --> M
+  H --> M
+  M --> L[Leaderboard score]
+  L --> C[Candidate pool status]
 ```
 
-## 5) Local Data Layout (source of truth)
+## 6) Local Data Layout
 
 Workspace data:
 
@@ -101,19 +143,20 @@ data/workspaces/{workspace_id}/metadata.json
 data/workspaces/{workspace_id}/documents/{doc_id}_{file_name}
 data/workspaces/{workspace_id}/eval_sets/golden_questions.jsonl
 data/workspaces/{workspace_id}/experiments/run_*.json
+data/workspaces/{workspace_id}/phase_artifacts/artifact_*.json
 data/workspaces/{workspace_id}/reports/run_*.md
 ```
 
-Global legacy data (khong phai flow chinh nua):
+Global legacy data:
 
 ```text
 data/metadata.json
 data/documents/*
 ```
 
-## 6) "Folder co nhung chua active"
+## 7) Folders Co Nhung Chua Active Day Du
 
-Nhung folder nay co the la scaffold/y tuong, chua duoc wired vao flow workspace-first:
+Nhung folder nay co the la scaffold/y tuong, chua duoc wired vao full multi-phase pipeline:
 
 ```text
 app/ingestion/
@@ -124,7 +167,4 @@ app/evaluation/
 app/database/
 ```
 
-`app/vectorstore/` co client Chroma, nhung "vector retrieval strategy" chua duoc integrate vao:
-- `app/services/retrieval_service.py`
-- `app/services/experiment_service.py`
-
+`app/vectorstore/` is now used by vector retrieval, but the future architecture should still move strategies into clearer modules once behavior is stable.

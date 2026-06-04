@@ -21,16 +21,20 @@ import {
   deleteWorkspaceDocument,
   deleteWorkspaceEvalQuestion,
   fetchHealth,
+  getLatestWorkspacePhaseArtifact,
   getWorkspaceExperiment,
   getWorkspaceReport,
   listWorkspaceExperiments,
   fetchWorkspaceDocument,
   listWorkspaceDocuments,
   listWorkspaceEvalQuestions,
+  listWorkspaceRagConfigs,
+  listWorkspaceRagPhases,
   listWorkspaces,
   queryWorkspaceResearch,
   runWorkspaceExperiment,
   uploadWorkspaceDocument,
+  uploadWorkspaceDocumentFolder,
   uploadWorkspaceEvalQuestions,
 } from './api/client'
 import type {
@@ -38,9 +42,14 @@ import type {
   DocumentSummary,
   EvalQuestion,
   ExperimentComparisonResponse,
+  ExperimentQuestionComparisonRow,
   ExperimentReportResponse,
   ExperimentRunResponse,
+  ExperimentStrategyQuestionResult,
   ExperimentSummary,
+  PhaseArtifact,
+  RagConfigPreset,
+  RagPhase,
   ResearchQueryResponse,
   WorkspaceSummary,
 } from './types/api'
@@ -48,6 +57,17 @@ import type {
 type HealthState = 'checking' | 'online' | 'offline'
 type WorkspaceTab = 'documents' | 'golden' | 'experiments' | 'reports' | 'playground'
 type RetrievalStrategy = 'keyword' | 'vector' | 'hybrid'
+type QuestionComparisonFilter =
+  | 'all'
+  | 'all_failed'
+  | 'partial_hit'
+  | 'all_hit'
+  | 'winner_keyword'
+  | 'winner_vector'
+  | 'winner_hybrid'
+
+const DEFAULT_RAG_CONFIG_ID = 'cfg_keyword_baseline'
+const DEFAULT_RAG_PHASE_ID = 'retriever_evaluation'
 
 function App() {
   const [health, setHealth] = useState<HealthState>('checking')
@@ -63,11 +83,15 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentDetail | null>(null)
 
   const [evalQuestions, setEvalQuestions] = useState<EvalQuestion[]>([])
+  const [ragConfigs, setRagConfigs] = useState<RagConfigPreset[]>([])
+  const [selectedConfigId, setSelectedConfigId] = useState(DEFAULT_RAG_CONFIG_ID)
+  const [ragPhases, setRagPhases] = useState<RagPhase[]>([])
+  const [selectedPhaseId, setSelectedPhaseId] = useState(DEFAULT_RAG_PHASE_ID)
   const [experiments, setExperiments] = useState<ExperimentSummary[]>([])
   const [selectedRun, setSelectedRun] = useState<ExperimentRunResponse | null>(null)
   const [selectedComparison, setSelectedComparison] = useState<ExperimentComparisonResponse | null>(null)
+  const [latestPhaseArtifact, setLatestPhaseArtifact] = useState<PhaseArtifact | null>(null)
   const [selectedReport, setSelectedReport] = useState<ExperimentReportResponse | null>(null)
-  const [experimentStrategy, setExperimentStrategy] = useState<RetrievalStrategy>('keyword')
   const [question, setQuestion] = useState('What does this workspace say about FastAPI?')
   const [answer, setAnswer] = useState<ResearchQueryResponse | null>(null)
 
@@ -85,11 +109,8 @@ function App() {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [workspaces, selectedWorkspaceId],
   )
-  const invalidEvalQuestions = useMemo(
-    () =>
-      evalQuestions.filter(
-        (item) => item.expected_chunk_ids.length === 0 || item.expected_chunk_ids.every((chunkId) => !chunkId.trim()),
-      ),
+  const weakLabelEvalQuestions = useMemo(
+    () => evalQuestions.filter((item) => item.label_type !== 'strong_chunk_ids'),
     [evalQuestions],
   )
 
@@ -125,6 +146,11 @@ function App() {
     if (!workspaceId) {
       setDocuments([])
       setEvalQuestions([])
+      setRagConfigs([])
+      setSelectedConfigId(DEFAULT_RAG_CONFIG_ID)
+      setRagPhases([])
+      setSelectedPhaseId(DEFAULT_RAG_PHASE_ID)
+      setLatestPhaseArtifact(null)
       setSelectedDocumentId('')
       setSelectedDocument(null)
       return
@@ -132,12 +158,29 @@ function App() {
 
     setIsLoadingWorkspace(true)
     try {
-      const [workspaceDocuments, workspaceEval] = await Promise.all([
+      const [
+        workspaceDocuments,
+        workspaceEval,
+        workspaceRagConfigs,
+        workspaceRagPhases,
+      ] = await Promise.all([
         listWorkspaceDocuments(workspaceId),
         listWorkspaceEvalQuestions(workspaceId),
+        listWorkspaceRagConfigs(workspaceId),
+        listWorkspaceRagPhases(workspaceId),
       ])
+      const activePhaseId = firstEnabledPhaseId(workspaceRagPhases.items)
+      const phaseConfigId =
+        workspaceRagConfigs.items.find((config) => config.rag_stage === activePhaseId)?.config_id ??
+        workspaceRagConfigs.items[0]?.config_id ??
+        DEFAULT_RAG_CONFIG_ID
       setDocuments(workspaceDocuments)
       setEvalQuestions(workspaceEval.items)
+      setRagConfigs(workspaceRagConfigs.items)
+      setSelectedConfigId(phaseConfigId)
+      setRagPhases(workspaceRagPhases.items)
+      setSelectedPhaseId(activePhaseId)
+      setLatestPhaseArtifact(await getLatestWorkspacePhaseArtifact(workspaceId, activePhaseId).catch(() => null))
       if (workspaceDocuments.length > 0) {
         await selectDocument(workspaceId, workspaceDocuments[0].id)
       } else {
@@ -249,6 +292,33 @@ function App() {
     }
   }
 
+  async function handleUploadDocumentFolder(files: File[]) {
+    if (!selectedWorkspaceId) {
+      return
+    }
+    if (files.length === 0) {
+      return
+    }
+
+    setIsUploadingDocument(true)
+    setNotice('')
+    try {
+      const validFiles = files.filter((file) => isSupportedDocumentFile(file))
+      const result = await uploadWorkspaceDocumentFolder(selectedWorkspaceId, validFiles)
+      const workspaceDocuments = await listWorkspaceDocuments(selectedWorkspaceId)
+      setDocuments(workspaceDocuments)
+      if (workspaceDocuments.length > 0) {
+        await selectDocument(selectedWorkspaceId, workspaceDocuments[workspaceDocuments.length - 1].id)
+      }
+      await refreshWorkspaces(selectedWorkspaceId)
+      setNotice(`Imported ${result.imported} file(s), skipped ${result.skipped + (files.length - validFiles.length)}`)
+    } catch (error) {
+      setNotice(getErrorMessage(error))
+    } finally {
+      setIsUploadingDocument(false)
+    }
+  }
+
   async function handleDeleteDocument(documentId: string) {
     if (!selectedWorkspaceId) {
       return
@@ -317,7 +387,7 @@ function App() {
     try {
       const result = await queryWorkspaceResearch(selectedWorkspaceId, {
         question,
-        top_k: 3,
+        top_k: 5,
       })
       setAnswer(result)
     } catch (error) {
@@ -331,11 +401,16 @@ function App() {
     setSelectedWorkspaceId('')
     setDocuments([])
     setEvalQuestions([])
+    setRagConfigs([])
+    setSelectedConfigId(DEFAULT_RAG_CONFIG_ID)
+    setRagPhases([])
+    setSelectedPhaseId(DEFAULT_RAG_PHASE_ID)
     setSelectedDocumentId('')
     setSelectedDocument(null)
     setExperiments([])
     setSelectedRun(null)
     setSelectedComparison(null)
+    setLatestPhaseArtifact(null)
     setSelectedReport(null)
     setAnswer(null)
     setActiveTab('documents')
@@ -349,9 +424,12 @@ function App() {
     setIsRunningExperiment(true)
     setNotice('')
     try {
+      const selectedConfig = findRagConfig(ragConfigs, selectedConfigId)
       const run = await runWorkspaceExperiment(selectedWorkspaceId, {
-        strategy: experimentStrategy,
-        top_k: 3,
+        strategy: selectedConfig?.strategy ?? strategyFromConfigId(selectedConfigId),
+        config_id: selectedConfigId,
+        top_k: 5,
+        stage: selectedPhaseId,
       })
       const latest = await listWorkspaceExperiments(selectedWorkspaceId)
       setExperiments(latest.items)
@@ -374,13 +452,21 @@ function App() {
     setIsRunningExperiment(true)
     setNotice('')
     try {
+      const phaseConfigs = ragConfigs.filter((config) => config.rag_stage === selectedPhaseId)
+      const comparisonConfigIds = phaseConfigs.map((config) => config.config_id)
+      const comparisonStrategies =
+        phaseConfigs.length > 0 ? phaseConfigs.map((config) => config.strategy) : ['keyword', 'vector', 'hybrid']
       const comparison = await compareWorkspaceExperiments(selectedWorkspaceId, {
-        strategies: ['keyword', 'vector', 'hybrid'],
-        top_k: 3,
+        strategies: comparisonStrategies,
+        config_ids: comparisonConfigIds.length > 0 ? comparisonConfigIds : undefined,
+        top_k: 5,
+        stage: selectedPhaseId,
+        candidate_pool_size: selectedPhaseId === 'chunking_evaluation' ? 3 : 5,
       })
       const latest = await listWorkspaceExperiments(selectedWorkspaceId)
       setExperiments(latest.items)
       setSelectedComparison(comparison)
+      setLatestPhaseArtifact(comparison.phase_artifact)
       setSelectedRun(null)
       setActiveTab('experiments')
       setNotice(`Comparison completed. Best strategy: ${comparison.best_strategy ?? 'n/a'}`)
@@ -388,6 +474,19 @@ function App() {
       setNotice(getErrorMessage(error))
     } finally {
       setIsRunningExperiment(false)
+    }
+  }
+
+  function handleSelectedPhaseChange(phaseId: string) {
+    setSelectedPhaseId(phaseId)
+    const nextConfigId = ragConfigs.find((config) => config.rag_stage === phaseId)?.config_id
+    if (nextConfigId) {
+      setSelectedConfigId(nextConfigId)
+    }
+    if (selectedWorkspaceId) {
+      getLatestWorkspacePhaseArtifact(selectedWorkspaceId, phaseId)
+        .then(setLatestPhaseArtifact)
+        .catch(() => setLatestPhaseArtifact(null))
     }
   }
 
@@ -569,6 +668,7 @@ function App() {
                 isUploadingDocument={isUploadingDocument}
                 onSelectDocument={(documentId) => selectDocument(selectedWorkspaceId, documentId)}
                 onUploadDocuments={handleUploadDocuments}
+                onUploadDocumentFolder={handleUploadDocumentFolder}
                 onDeleteDocument={handleDeleteDocument}
               />
             )}
@@ -576,7 +676,7 @@ function App() {
             {activeTab === 'golden' && (
               <GoldenTab
                 evalQuestions={evalQuestions}
-                invalidEvalCount={invalidEvalQuestions.length}
+                nonStrongLabelCount={weakLabelEvalQuestions.length}
                 isUploadingEval={isUploadingEval}
                 onUploadEval={handleUploadEval}
                 onDeleteEvalQuestion={handleDeleteEvalQuestion}
@@ -588,11 +688,16 @@ function App() {
                 experiments={experiments}
                 selectedRun={selectedRun}
                 selectedComparison={selectedComparison}
-                experimentStrategy={experimentStrategy}
+                latestPhaseArtifact={latestPhaseArtifact}
+                ragConfigs={ragConfigs}
+                selectedConfigId={selectedConfigId}
+                ragPhases={ragPhases}
+                selectedPhaseId={selectedPhaseId}
                 evalQuestionCount={evalQuestions.length}
-                invalidEvalCount={invalidEvalQuestions.length}
+                nonStrongLabelCount={weakLabelEvalQuestions.length}
                 isRunningExperiment={isRunningExperiment}
-                onExperimentStrategyChange={setExperimentStrategy}
+                onSelectedConfigIdChange={setSelectedConfigId}
+                onSelectedPhaseIdChange={handleSelectedPhaseChange}
                 onRunExperiment={handleRunExperiment}
                 onRunComparison={handleRunComparison}
                 onSelectExperiment={handleSelectExperiment}
@@ -692,6 +797,7 @@ function DocumentsTab({
   isUploadingDocument,
   onSelectDocument,
   onUploadDocuments,
+  onUploadDocumentFolder,
   onDeleteDocument,
 }: {
   documents: DocumentSummary[]
@@ -701,6 +807,7 @@ function DocumentsTab({
   isUploadingDocument: boolean
   onSelectDocument: (documentId: string) => void
   onUploadDocuments: (files: File[]) => void
+  onUploadDocumentFolder: (files: File[]) => void
   onDeleteDocument: (documentId: string) => void
 }) {
   return (
@@ -726,6 +833,22 @@ function DocumentsTab({
           {isUploadingDocument ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
           {isUploadingDocument ? 'Uploading...' : 'Select .txt / .md'}
         </label>
+        <label className="upload">
+          <input
+            type="file"
+            multiple
+            {...{ webkitdirectory: '' }}
+            onChange={(event) => {
+              const selectedFiles = event.target.files ? Array.from(event.target.files) : []
+              if (selectedFiles.length > 0) {
+                onUploadDocumentFolder(selectedFiles)
+                event.target.value = ''
+              }
+            }}
+          />
+          {isUploadingDocument ? <Loader2 className="spin" size={16} /> : <FolderOpen size={16} />}
+          {isUploadingDocument ? 'Uploading corpus...' : 'Select folder'}
+        </label>
       </section>
 
       <section className="card">
@@ -748,6 +871,7 @@ function DocumentsTab({
                 <span>
                   {document.file_type.toUpperCase()} | {document.chunk_count} chunks
                 </span>
+                <span>{document.doc_type} | {document.relative_path || document.file_name}</span>
               </button>
             ))}
           </div>
@@ -776,6 +900,15 @@ function DocumentsTab({
               <Stat label="Chars" value={String(selectedDocument.content_length)} />
               <Stat label="Chunks" value={String(selectedDocument.chunk_count)} />
               <Stat label="Type" value={selectedDocument.file_type.toUpperCase()} />
+              <Stat label="Doc Type" value={selectedDocument.doc_type || 'root'} />
+            </div>
+            <div className="summary-box">
+              <p>
+                <strong>Source:</strong> {selectedDocument.source_path || selectedDocument.file_name}
+              </p>
+              <p>
+                <strong>Folder:</strong> {selectedDocument.folder_path || '(root)'}
+              </p>
             </div>
             <pre className="preview">{selectedDocument.content}</pre>
           </>
@@ -789,13 +922,13 @@ function DocumentsTab({
 
 function GoldenTab({
   evalQuestions,
-  invalidEvalCount,
+  nonStrongLabelCount,
   isUploadingEval,
   onUploadEval,
   onDeleteEvalQuestion,
 }: {
   evalQuestions: EvalQuestion[]
-  invalidEvalCount: number
+  nonStrongLabelCount: number
   isUploadingEval: boolean
   onUploadEval: (file: File) => void
   onDeleteEvalQuestion: (questionId: string) => void
@@ -810,7 +943,7 @@ function GoldenTab({
         <label className="upload">
           <input
             type="file"
-            accept=".jsonl"
+            accept=".jsonl,.csv"
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (file) {
@@ -820,7 +953,7 @@ function GoldenTab({
             }}
           />
           {isUploadingEval ? <Loader2 className="spin" size={16} /> : <Upload size={16} />}
-          {isUploadingEval ? 'Importing...' : 'Select golden_questions.jsonl'}
+          {isUploadingEval ? 'Importing...' : 'Select golden_questions.jsonl or .csv'}
         </label>
       </section>
 
@@ -829,9 +962,9 @@ function GoldenTab({
           <Beaker size={17} />
           <h2>Golden Questions</h2>
         </div>
-        {invalidEvalCount > 0 && (
+        {nonStrongLabelCount > 0 && (
           <p className="meta">
-            {invalidEvalCount} question(s) are missing expected chunk ids. Re-upload a fixed JSONL before running experiments.
+            {nonStrongLabelCount} question(s) will use evidence-text or weak-label evaluation instead of direct chunk-id matching.
           </p>
         )}
         {evalQuestions.length === 0 ? (
@@ -847,7 +980,11 @@ function GoldenTab({
                   </button>
                 </div>
                 <p>{item.question}</p>
-                <p className="meta">top_k={item.top_k} | expected={item.expected_chunk_ids.join(', ') || '(none)'}</p>
+                <p className="meta">
+                  top_k={item.top_k} | label={item.label_type} | expected={item.expected_chunk_ids.join(', ') || '(none)'}
+                </p>
+                {!!item.category && <p className="meta">category={item.category}</p>}
+                {!!item.keywords.length && <p className="meta">keywords={item.keywords.join(', ')}</p>}
               </article>
             ))}
           </div>
@@ -861,11 +998,16 @@ function ExperimentsTab({
   experiments,
   selectedRun,
   selectedComparison,
-  experimentStrategy,
+  latestPhaseArtifact,
+  ragConfigs,
+  selectedConfigId,
+  ragPhases,
+  selectedPhaseId,
   evalQuestionCount,
-  invalidEvalCount,
+  nonStrongLabelCount,
   isRunningExperiment,
-  onExperimentStrategyChange,
+  onSelectedConfigIdChange,
+  onSelectedPhaseIdChange,
   onRunExperiment,
   onRunComparison,
   onSelectExperiment,
@@ -874,17 +1016,32 @@ function ExperimentsTab({
   experiments: ExperimentSummary[]
   selectedRun: ExperimentRunResponse | null
   selectedComparison: ExperimentComparisonResponse | null
-  experimentStrategy: RetrievalStrategy
+  latestPhaseArtifact: PhaseArtifact | null
+  ragConfigs: RagConfigPreset[]
+  selectedConfigId: string
+  ragPhases: RagPhase[]
+  selectedPhaseId: string
   evalQuestionCount: number
-  invalidEvalCount: number
+  nonStrongLabelCount: number
   isRunningExperiment: boolean
-  onExperimentStrategyChange: (value: RetrievalStrategy) => void
+  onSelectedConfigIdChange: (value: string) => void
+  onSelectedPhaseIdChange: (value: string) => void
   onRunExperiment: () => void
   onRunComparison: () => void
   onSelectExperiment: (runId: string) => void
   onViewReport: (runId: string) => void
 }) {
-  const canRunExperiment = evalQuestionCount > 0 && invalidEvalCount === 0
+  const canRunExperiment = evalQuestionCount > 0
+  const phaseConfigs = ragConfigs.filter((config) => config.rag_stage === selectedPhaseId)
+  const configOptions = phaseConfigs.length > 0 ? phaseConfigs : fallbackRagConfigOptions(selectedPhaseId)
+  const selectedConfig = findRagConfig(configOptions, selectedConfigId)
+  const phaseOptions = ragPhases.length > 0 ? ragPhases : fallbackRagPhaseOptions()
+  const selectedPhase = findRagPhase(phaseOptions, selectedPhaseId)
+  const [questionFilter, setQuestionFilter] = useState<QuestionComparisonFilter>('all')
+  const questionComparisons = selectedComparison?.question_comparisons ?? []
+  const visibleQuestionComparisons = questionComparisons.filter((row) =>
+    matchesQuestionFilter(row, questionFilter),
+  )
 
   return (
     <section className="tab-layout">
@@ -897,17 +1054,42 @@ function ExperimentsTab({
           <p className="meta">
             {evalQuestionCount === 0
               ? 'Upload golden questions before running an experiment.'
-              : `${invalidEvalCount} golden question(s) still have invalid expected chunk ids.`}
+              : `${nonStrongLabelCount} golden question(s) will use soft labels during evaluation.`}
+          </p>
+        )}
+        {canRunExperiment && nonStrongLabelCount > 0 && (
+          <p className="meta">{nonStrongLabelCount} golden question(s) are using evidence-text or weak-label scoring.</p>
+        )}
+        <div className="inline-form phase-form">
+          <select
+            value={selectedPhaseId}
+            onChange={(event) => onSelectedPhaseIdChange(event.target.value)}
+          >
+            {phaseOptions.map((phase) => (
+              <option value={phase.phase_id} key={phase.phase_id} disabled={!phase.enabled}>
+                {phase.name} {phase.enabled ? '' : `(${phase.status})`}
+              </option>
+            ))}
+          </select>
+          <span className={`pill ${selectedPhase?.enabled ? 'active_phase' : 'planned_phase'}`}>
+            {selectedPhase?.status ?? 'planned'}
+          </span>
+        </div>
+        {selectedPhase && (
+          <p className="meta config-note">
+            {selectedPhase.phase_id} | {selectedPhase.description}
           </p>
         )}
         <div className="inline-form">
           <select
-            value={experimentStrategy}
-            onChange={(event) => onExperimentStrategyChange(event.target.value as RetrievalStrategy)}
+            value={selectedConfig?.config_id ?? configOptions[0]?.config_id ?? selectedConfigId}
+            onChange={(event) => onSelectedConfigIdChange(event.target.value)}
           >
-            <option value="keyword">keyword</option>
-            <option value="vector">vector</option>
-            <option value="hybrid">hybrid</option>
+            {configOptions.map((config) => (
+              <option value={config.config_id} key={config.config_id}>
+                {config.name}
+              </option>
+            ))}
           </select>
           <button
             className="btn primary"
@@ -916,9 +1098,15 @@ function ExperimentsTab({
             disabled={isRunningExperiment || !canRunExperiment}
           >
             {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Beaker size={15} />}
-            Run experiment (top_k=3)
+            Run experiment (top_k=5)
           </button>
         </div>
+        {selectedConfig && (
+          <p className="meta config-note">
+            {selectedConfig.config_id} | {formatStageLabel(selectedConfig.rag_stage)} | retriever:{' '}
+            {selectedConfig.retriever.type}
+          </p>
+        )}
         <button
           className="btn secondary full"
           type="button"
@@ -926,36 +1114,234 @@ function ExperimentsTab({
           disabled={isRunningExperiment || !canRunExperiment}
         >
           {isRunningExperiment ? <Loader2 className="spin" size={15} /> : <Activity size={15} />}
-          Compare keyword / vector / hybrid
+          Compare rag_config presets
         </button>
       </section>
 
       {selectedComparison && (
+        <>
+          <section className="card">
+            <div className="card-title">
+              <Activity size={17} />
+              <h2>RAG Phase Leaderboard</h2>
+            </div>
+            <p className="meta">
+              {formatStageLabel(selectedComparison.stage)} | top_k={selectedComparison.top_k} |{' '}
+              {selectedComparison.created_at}
+            </p>
+            <div className="count-grid four">
+              <Stat label="Tested" value={String(selectedComparison.summary.total_configs)} />
+              <Stat label="Candidate Pool" value={String(selectedComparison.summary.candidate_pool_size)} />
+              <Stat label="Kept" value={String(selectedComparison.summary.kept_count)} />
+              <Stat label="Best" value={selectedComparison.summary.best_config_name ?? 'n/a'} />
+            </div>
+            <div className="summary-box">
+              <p>
+                <strong>Fastest:</strong> {selectedComparison.summary.fastest_config_name ?? 'n/a'}
+              </p>
+              <p>
+                <strong>Highest recall:</strong> {selectedComparison.summary.highest_recall_config_name ?? 'n/a'}
+              </p>
+              <p>{selectedComparison.summary.recommendation}</p>
+            </div>
+            <div className="table-wrap">
+              <table className="leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Config</th>
+                    <th>Hit@k</th>
+                    <th>Recall</th>
+                    <th>Precision</th>
+                    <th>MRR</th>
+                    <th>Chunks</th>
+                    <th>Avg Size</th>
+                    <th>Coverage</th>
+                    <th>Latency</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedComparison.leaderboard.map((row) => (
+                    <tr key={row.run_id}>
+                      <td>{row.rank}</td>
+                      <td>
+                        <strong>{row.config_name}</strong>
+                        <span className="table-subtext">{row.config_id}</span>
+                        {row.rag_config && (
+                          <span className="table-subtext">{formatRagConfigDetails(row.rag_config)}</span>
+                        )}
+                        <span className="table-subtext">{row.verdict}</span>
+                      </td>
+                      <td>{row.metrics.hit_at_k.toFixed(3)}</td>
+                      <td>{row.metrics.recall_at_k.toFixed(3)}</td>
+                      <td>{row.metrics.precision_at_k.toFixed(3)}</td>
+                      <td>{row.metrics.mrr.toFixed(3)}</td>
+                      <td>{formatMetricNumber(row.metrics.chunk_count)}</td>
+                      <td>{formatMetricNumber(row.metrics.avg_chunk_size)}</td>
+                      <td>{formatMetricPercent(row.metrics.coverage_ratio)}</td>
+                      <td>{row.metrics.avg_latency_ms.toFixed(1)}ms</td>
+                      <td>{row.score.toFixed(3)}</td>
+                      <td>
+                        <span className={`pill ${row.status}`}>{row.status}</span>
+                      </td>
+                      <td>
+                        <button className="btn secondary" type="button" onClick={() => onSelectExperiment(row.run_id)}>
+                          Detail
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-title">
+              <Search size={17} />
+              <h2>Question-Level Comparison</h2>
+            </div>
+            <div className="filter-row">
+              <select
+                value={questionFilter}
+                onChange={(event) => setQuestionFilter(event.target.value as QuestionComparisonFilter)}
+              >
+                <option value="all">All questions</option>
+                <option value="all_failed">All strategies failed</option>
+                <option value="partial_hit">Only some strategies hit</option>
+                <option value="all_hit">All strategies hit</option>
+                <option value="winner_keyword">Keyword wins</option>
+                <option value="winner_vector">Vector wins</option>
+                <option value="winner_hybrid">Hybrid wins</option>
+              </select>
+              <span className="meta">
+                {visibleQuestionComparisons.length}/{questionComparisons.length} questions
+              </span>
+            </div>
+            {questionComparisons.length === 0 ? (
+              <p className="meta">Run a comparison again to generate question-level analysis.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="question-table">
+                  <thead>
+                    <tr>
+                      <th>Question</th>
+                      <th>Expected</th>
+                      <th>Keyword</th>
+                      <th>Vector</th>
+                      <th>Hybrid</th>
+                      <th>Winner</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleQuestionComparisons.map((row) => (
+                      <tr key={row.question_id}>
+                        <td>
+                          <strong>{row.question_id}</strong>
+                          <span className="table-subtext">{row.question}</span>
+                          {row.notes && <span className="table-subtext">notes: {row.notes}</span>}
+                        </td>
+                        <td>
+                          <span className="chunk-list">{formatChunkIds(row.expected_chunk_ids)}</span>
+                        </td>
+                        <td>
+                          <QuestionStrategyCell row={row} strategy="keyword" />
+                        </td>
+                        <td>
+                          <QuestionStrategyCell row={row} strategy="vector" />
+                        </td>
+                        <td>
+                          <QuestionStrategyCell row={row} strategy="hybrid" />
+                        </td>
+                        <td>{row.winner ? formatStrategyLabel(row.winner) : 'None'}</td>
+                        <td>
+                          <span className={`pill ${row.status}`}>{formatQuestionStatusLabel(row.status)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {latestPhaseArtifact && (
         <section className="card">
           <div className="card-title">
-            <Activity size={17} />
-            <h2>Strategy Comparison</h2>
+            <FileText size={17} />
+            <h2>Latest Phase Artifact</h2>
           </div>
           <p className="meta">
-            Best: {selectedComparison.best_strategy ?? 'n/a'} | top_k={selectedComparison.top_k} |{' '}
-            {selectedComparison.created_at}
+            {latestPhaseArtifact.artifact_id} | {formatStageLabel(latestPhaseArtifact.phase_id)} |{' '}
+            {latestPhaseArtifact.created_at}
           </p>
-          <div className="qa-list">
-            {selectedComparison.runs.map((run) => (
-              <article className="qa-item" key={run.run_id}>
-                <div className="row-between">
-                  <strong>{run.strategy}</strong>
-                  <button className="btn secondary" type="button" onClick={() => onSelectExperiment(run.run_id)}>
-                    Detail
-                  </button>
-                </div>
-                <p className="meta">
-                  hit@k {run.metrics.hit_at_k.toFixed(3)} | recall {run.metrics.recall_at_k.toFixed(3)} | precision{' '}
-                  {run.metrics.precision_at_k.toFixed(3)} | mrr {run.metrics.mrr.toFixed(3)} | latency{' '}
-                  {run.metrics.avg_latency_ms.toFixed(1)}ms
-                </p>
-              </article>
-            ))}
+          <div className="count-grid four">
+            <Stat label="Tested" value={String(latestPhaseArtifact.total_candidates)} />
+            <Stat label="Pool Size" value={String(latestPhaseArtifact.candidate_pool_size)} />
+            <Stat label="Kept" value={String(latestPhaseArtifact.kept_count)} />
+            <Stat label="Best" value={latestPhaseArtifact.best_config_name ?? 'n/a'} />
+          </div>
+          <div className="summary-box">
+            {latestPhaseArtifact.parent_artifact_id && (
+              <p>
+                <strong>Input artifact:</strong> {latestPhaseArtifact.parent_artifact_id} from{' '}
+                {formatStageLabel(latestPhaseArtifact.parent_phase_id ?? 'unknown')}
+              </p>
+            )}
+            <p>
+              <strong>Kept config ids:</strong> {formatIdList(latestPhaseArtifact.kept_config_ids)}
+            </p>
+            <p>
+              <strong>Pruned config ids:</strong> {formatIdList(latestPhaseArtifact.pruned_config_ids)}
+            </p>
+          </div>
+          <div className="table-wrap">
+            <table className="leaderboard-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Config</th>
+                  <th>Hit@k</th>
+                  <th>Recall</th>
+                  <th>MRR</th>
+                  <th>Chunks</th>
+                  <th>Coverage</th>
+                  <th>Score</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestPhaseArtifact.candidates.map((candidate) => (
+                  <tr key={`${latestPhaseArtifact.artifact_id}-${candidate.run_id}`}>
+                    <td>{candidate.rank}</td>
+                    <td>
+                      <strong>{candidate.config_name}</strong>
+                      <span className="table-subtext">{candidate.config_id}</span>
+                      <span className="table-subtext">
+                        chunking: {formatChunkingDetails(candidate.chunking_type, candidate.chunking_params)} |
+                        retriever: {candidate.retriever_type || candidate.strategy}
+                      </span>
+                      <span className="table-subtext">{candidate.verdict}</span>
+                    </td>
+                    <td>{candidate.hit_at_k.toFixed(3)}</td>
+                    <td>{candidate.recall_at_k.toFixed(3)}</td>
+                    <td>{candidate.mrr.toFixed(3)}</td>
+                    <td>{formatMetricNumber(candidate.chunk_count)}</td>
+                    <td>{formatMetricPercent(candidate.coverage_ratio)}</td>
+                    <td>{candidate.score.toFixed(3)}</td>
+                    <td>
+                      <span className={`pill ${candidate.status}`}>{candidate.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}
@@ -983,7 +1369,8 @@ function ExperimentsTab({
                   </div>
                 </div>
                 <p className="meta">
-                  {run.strategy} | hit@k {run.metrics.hit_at_k.toFixed(3)} | mrr {run.metrics.mrr.toFixed(3)}
+                  {run.config_name || formatStrategyLabel(run.strategy)} | {run.config_id || run.strategy} | hit@k{' '}
+                  {run.metrics.hit_at_k.toFixed(3)} | mrr {run.metrics.mrr.toFixed(3)}
                 </p>
               </article>
             ))}
@@ -998,6 +1385,10 @@ function ExperimentsTab({
             <h2>Run Detail</h2>
           </div>
           <p className="meta">{selectedRun.run_id} | {selectedRun.created_at}</p>
+          <p className="meta">
+            {selectedRun.config_name || formatStrategyLabel(selectedRun.strategy)} |{' '}
+            {selectedRun.config_id || selectedRun.strategy} | {formatStageLabel(selectedRun.rag_stage || 'retriever_evaluation')}
+          </p>
           <div className="count-grid">
             <Stat label="Hit@k" value={selectedRun.metrics.hit_at_k.toFixed(3)} />
             <Stat label="Recall@k" value={selectedRun.metrics.recall_at_k.toFixed(3)} />
@@ -1131,11 +1522,240 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+function findRagConfig(configs: RagConfigPreset[], configId: string): RagConfigPreset | undefined {
+  return configs.find((config) => config.config_id === configId)
+}
+
+function findRagPhase(phases: RagPhase[], phaseId: string): RagPhase | undefined {
+  return phases.find((phase) => phase.phase_id === phaseId)
+}
+
+function firstEnabledPhaseId(phases: RagPhase[]) {
+  return phases.find((phase) => phase.enabled)?.phase_id ?? DEFAULT_RAG_PHASE_ID
+}
+
+function fallbackRagPhaseOptions(): RagPhase[] {
+  return [
+    buildFallbackRagPhase('baseline_sanity', 'Baseline Sanity', 'planned', false, 0),
+    buildFallbackRagPhase('chunking_evaluation', 'Chunking Evaluation', 'active', true, 1),
+    buildFallbackRagPhase('retriever_evaluation', 'Retriever Evaluation', 'active', true, 2),
+    buildFallbackRagPhase('query_transform_evaluation', 'Query Transform Evaluation', 'planned', false, 3),
+    buildFallbackRagPhase('reranker_evaluation', 'Reranker Evaluation', 'planned', false, 4),
+    buildFallbackRagPhase('context_builder_evaluation', 'Context Builder Evaluation', 'planned', false, 5),
+    buildFallbackRagPhase('answer_evaluation', 'End-to-End Answer Evaluation', 'planned', false, 6),
+  ]
+}
+
+function buildFallbackRagPhase(
+  phaseId: string,
+  name: string,
+  status: string,
+  enabled: boolean,
+  order: number,
+): RagPhase {
+  return {
+    phase_id: phaseId,
+    name,
+    description: enabled ? 'Current runnable RAG evaluation phase.' : 'Planned RAG evaluation phase.',
+    status,
+    enabled,
+    order,
+  }
+}
+
+function strategyFromConfigId(configId: string): RetrievalStrategy {
+  if (configId.includes('vector')) {
+    return 'vector'
+  }
+  if (configId.includes('hybrid')) {
+    return 'hybrid'
+  }
+  return 'keyword'
+}
+
+function fallbackRagConfigOptions(stage = DEFAULT_RAG_PHASE_ID): RagConfigPreset[] {
+  if (stage === 'chunking_evaluation') {
+    return [
+      buildFallbackRagConfig('cfg_chunk_fixed_500_50', 'Chunk fixed 500 / overlap 50', 'keyword', stage, {
+        chunk_size: 500,
+        overlap: 50,
+      }),
+      buildFallbackRagConfig('cfg_chunk_fixed_800_100', 'Chunk fixed 800 / overlap 100', 'keyword', stage, {
+        chunk_size: 800,
+        overlap: 100,
+      }),
+      buildFallbackRagConfig('cfg_chunk_fixed_1200_150', 'Chunk fixed 1200 / overlap 150', 'keyword', stage, {
+        chunk_size: 1200,
+        overlap: 150,
+      }),
+      buildFallbackRagConfig('cfg_chunk_paragraph_1000', 'Chunk paragraph max 1000', 'keyword', stage, {
+        max_chunk_size: 1000,
+      }, 'paragraph'),
+      buildFallbackRagConfig('cfg_chunk_recursive_500_200', 'Chunk recursive 500 / overlap 200', 'keyword', stage, {
+        chunk_size: 500,
+        overlap: 200,
+      }, 'recursive_character'),
+      buildFallbackRagConfig('cfg_chunk_recursive_800_200', 'Chunk recursive 800 / overlap 200', 'keyword', stage, {
+        chunk_size: 800,
+        overlap: 200,
+      }, 'recursive_character'),
+      buildFallbackRagConfig('cfg_chunk_recursive_1000_250', 'Chunk recursive 1000 / overlap 250', 'keyword', stage, {
+        chunk_size: 1000,
+        overlap: 250,
+      }, 'recursive_character'),
+    ]
+  }
+
+  return [
+    buildFallbackRagConfig('cfg_keyword_baseline', 'Keyword baseline', 'keyword'),
+    buildFallbackRagConfig('cfg_vector_default', 'Vector semantic retrieval', 'vector'),
+    buildFallbackRagConfig('cfg_hybrid_default', 'Hybrid keyword + vector', 'hybrid'),
+  ]
+}
+
+function buildFallbackRagConfig(
+  configId: string,
+  name: string,
+  strategy: RetrievalStrategy,
+  stage = DEFAULT_RAG_PHASE_ID,
+  chunkingParams: Record<string, number> = { chunk_size: 800, overlap: 100 },
+  chunkingType = 'fixed',
+): RagConfigPreset {
+  return {
+    config_id: configId,
+    name,
+    description: name,
+    rag_stage: stage,
+    strategy,
+    top_k: 5,
+    chunking: { type: chunkingType, params: chunkingParams },
+    retriever: { type: strategy, params: { top_k: 5 } },
+    query_transform: { type: 'none', params: {} },
+    reranker: { type: 'none', params: {} },
+    context_builder: { type: 'plain_top_k', params: {} },
+  }
+}
+
+function QuestionStrategyCell({
+  row,
+  strategy,
+}: {
+  row: ExperimentQuestionComparisonRow
+  strategy: RetrievalStrategy
+}) {
+  const result = getQuestionStrategyResult(row, strategy)
+
+  if (!result) {
+    return <span className="meta">Not run</span>
+  }
+
+  return (
+    <div className="result-stack">
+      <span className={`pill ${result.hit ? 'hit' : 'miss'}`}>{result.hit ? 'hit' : 'miss'}</span>
+      <span className="table-subtext">{result.config_name || formatStrategyLabel(result.strategy)}</span>
+      <span>
+        R {result.recall_at_k.toFixed(3)} | P {result.precision_at_k.toFixed(3)}
+      </span>
+      <span>
+        MRR {result.reciprocal_rank.toFixed(3)} | {result.latency_ms.toFixed(1)}ms
+      </span>
+      <span className="table-subtext">returned: {formatChunkIds(result.returned_chunk_ids)}</span>
+    </div>
+  )
+}
+
+function getQuestionStrategyResult(
+  row: ExperimentQuestionComparisonRow,
+  strategy: RetrievalStrategy,
+): ExperimentStrategyQuestionResult | undefined {
+  const matchingResults = row.strategy_results.filter((item) => item.strategy === strategy)
+  return matchingResults.sort(
+    (left, right) =>
+      Number(right.hit) - Number(left.hit) ||
+      right.reciprocal_rank - left.reciprocal_rank ||
+      right.recall_at_k - left.recall_at_k ||
+      right.precision_at_k - left.precision_at_k ||
+      left.latency_ms - right.latency_ms,
+  )[0]
+}
+
+function matchesQuestionFilter(row: ExperimentQuestionComparisonRow, filter: QuestionComparisonFilter) {
+  if (filter === 'all') {
+    return true
+  }
+  if (filter.startsWith('winner_')) {
+    return row.winner === filter.replace('winner_', '')
+  }
+  return row.status === filter
+}
+
+function formatQuestionStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    all_failed: 'All failed',
+    partial_hit: 'Partial hit',
+    all_hit: 'All hit',
+  }
+  return labels[status] ?? status
+}
+
+function formatStrategyLabel(strategy: string) {
+  const labels: Record<string, string> = {
+    keyword: 'Keyword',
+    vector: 'Vector',
+    hybrid: 'Hybrid',
+  }
+  return labels[strategy] ?? strategy
+}
+
+function formatChunkIds(chunkIds: string[]) {
+  return chunkIds.length > 0 ? chunkIds.join(', ') : '(none)'
+}
+
+function formatIdList(ids: string[]) {
+  return ids.length > 0 ? ids.join(', ') : '(none)'
+}
+
+function formatMetricNumber(value: number) {
+  return value > 0 ? value.toFixed(0) : 'n/a'
+}
+
+function formatMetricPercent(value: number) {
+  return value > 0 ? value.toFixed(3) : 'n/a'
+}
+
+function formatRagConfigDetails(config: RagConfigPreset) {
+  return `chunking: ${formatChunkingDetails(config.chunking.type, config.chunking.params)} | retriever: ${
+    config.retriever.type
+  }`
+}
+
+function formatChunkingDetails(
+  chunkingType: string,
+  params: Record<string, string | number | boolean>,
+) {
+  const paramText = Object.entries(params)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(', ')
+  return paramText ? `${chunkingType} (${paramText})` : chunkingType
+}
+
+function formatStageLabel(stage: string) {
+  return stage
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message
   }
   return 'Something went wrong'
+}
+
+function isSupportedDocumentFile(file: File) {
+  const fileName = file.name.toLowerCase()
+  return fileName.endsWith('.txt') || fileName.endsWith('.md')
 }
 
 export default App

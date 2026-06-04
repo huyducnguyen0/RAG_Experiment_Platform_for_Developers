@@ -6,9 +6,20 @@ class DocumentChunk(BaseModel):
     document_id: str
     chunk_index: int
     content: str
+    original_text: str = ""
+    headline: str = ""
+    summary: str = ""
     start_index: int
     end_index: int
     content_length: int
+    source_path: str = ""
+    relative_path: str = ""
+    folder_path: str = ""
+    doc_type: str = ""
+    file_extension: str = ""
+    chunking_strategy: str = "fixed"
+    chunk_size: int = 0
+    chunk_overlap: int = 0
 
 
 class DocumentSummary(BaseModel):
@@ -17,6 +28,11 @@ class DocumentSummary(BaseModel):
     title: str
     file_name: str
     file_type: str
+    source_path: str = ""
+    relative_path: str = ""
+    folder_path: str = ""
+    doc_type: str = ""
+    file_extension: str = ""
     content_length: int
     chunk_count: int
     created_at: str
@@ -30,3 +46,10 @@ class DocumentDetail(DocumentSummary):
 class DeleteDocumentResponse(BaseModel):
     deleted: bool
     document_id: str
+
+
+class FolderUploadResponse(BaseModel):
+    workspace_id: str
+    imported: int
+    skipped: int
+    documents: list[DocumentSummary]
