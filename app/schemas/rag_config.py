@@ -18,6 +18,7 @@ class RagConfigPreset(BaseModel):
     query_transform: RagConfigComponent
     reranker: RagConfigComponent
     context_builder: RagConfigComponent
+    answer_generator: RagConfigComponent
 
 
 class RagConfigListResponse(BaseModel):

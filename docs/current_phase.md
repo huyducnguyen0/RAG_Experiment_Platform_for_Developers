@@ -48,9 +48,9 @@ Current checklist focus:
 
 Next concrete tasks:
 - Confirm list/delete APIs work for golden questions from the frontend.
-- Start modeling phase-specific experiment inputs for chunking, retriever, query transform, reranker, context builder, and final answer quality.
-- Use the latest `retriever_evaluation` artifact as the input candidate pool for the next planned phase later.
-- Add query transform evaluation phase after retriever artifacts are stable.
+- Stabilize `answer_evaluation` leaderboard behavior and inspect generated-answer failures.
+- Improve answer metrics beyond simple lexical overlap when the retrieval chain is stable enough.
+- Extend answer review UI toward manual review or judge-oriented inspection after the current answer artifact shape settles.
 
 Expected behavior:
 - Swagger exposes:
@@ -80,6 +80,10 @@ Expected behavior:
   - comparing baseline `rag_config` presets in one action
   - viewing the latest persisted phase artifact after compare
   - running `retriever_evaluation` from the latest kept `chunking_evaluation` artifact
+  - running `query_transform_evaluation` from the latest kept `retriever_evaluation` artifact
+  - running `reranker_evaluation` from the latest kept `query_transform_evaluation` artifact
+  - running `context_builder_evaluation` from the latest kept `reranker_evaluation` artifact
+  - running `answer_evaluation` from the latest kept `context_builder_evaluation` artifact
   - viewing a leaderboard table with score, rank, and candidate-pool status
   - viewing side-by-side question-level comparison across `keyword`, `vector`, and `hybrid`
   - reading saved reports

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -26,6 +27,10 @@ from app.services.document_service import _load_metadata, _read_document_content
 from app.services.eval_question_service import list_eval_questions, repair_eval_questions_missing_chunk_ids
 from app.services.evaluation_service import RetrievalEvalCase, evaluate_retrieval
 from app.services.rag_config_service import (
+    ANSWER_EVALUATION_RAG_STAGE,
+    CONTEXT_BUILDER_RAG_STAGE,
+    QUERY_TRANSFORM_RAG_STAGE,
+    RERANKER_RAG_STAGE,
     get_rag_config_by_strategy,
     get_rag_config_preset,
     list_rag_config_presets,
@@ -38,6 +43,10 @@ from app.services.retrieval_service import SUPPORTED_RETRIEVAL_STRATEGIES
 DEFAULT_COMPARISON_STAGE = DEFAULT_RAG_PHASE_ID
 CHUNKING_EVALUATION_STAGE = "chunking_evaluation"
 RETRIEVER_EVALUATION_STAGE = "retriever_evaluation"
+QUERY_TRANSFORM_EVALUATION_STAGE = QUERY_TRANSFORM_RAG_STAGE
+RERANKER_EVALUATION_STAGE = RERANKER_RAG_STAGE
+CONTEXT_BUILDER_EVALUATION_STAGE = CONTEXT_BUILDER_RAG_STAGE
+ANSWER_EVALUATION_STAGE = ANSWER_EVALUATION_RAG_STAGE
 
 
 def run_workspace_experiment(
@@ -110,6 +119,11 @@ def _run_workspace_experiment_with_config(
         chunks=runtime_chunks,
         relevance_mode="content_overlap" if selected_stage == CHUNKING_EVALUATION_STAGE or uses_runtime_chunks else "auto",
         retrieval_context_id=rag_config.config_id if uses_runtime_chunks else None,
+        query_transform=_build_query_transform_function(rag_config),
+        reranker=_build_reranker_function(rag_config),
+        context_builder=_build_context_builder_function(rag_config),
+        answer_generator=_build_answer_generator_function(rag_config),
+        retrieval_top_k=_resolve_retrieval_top_k(rag_config),
     )
     created_at = datetime.now(UTC).isoformat()
     run_id = f"run_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
@@ -179,6 +193,34 @@ def run_workspace_experiment_comparison(
             parent_artifact=parent_artifact,
             retriever_configs=resolved_configs,
         )
+    elif selected_stage == QUERY_TRANSFORM_EVALUATION_STAGE:
+        parent_artifact = _require_latest_retriever_artifact(workspace_id)
+        resolved_configs = _build_query_transform_phase_rag_configs(
+            workspace_id=workspace_id,
+            parent_artifact=parent_artifact,
+            query_transform_configs=resolved_configs,
+        )
+    elif selected_stage == RERANKER_EVALUATION_STAGE:
+        parent_artifact = _require_latest_query_transform_artifact(workspace_id)
+        resolved_configs = _build_reranker_phase_rag_configs(
+            workspace_id=workspace_id,
+            parent_artifact=parent_artifact,
+            reranker_configs=resolved_configs,
+        )
+    elif selected_stage == CONTEXT_BUILDER_EVALUATION_STAGE:
+        parent_artifact = _require_latest_reranker_artifact(workspace_id)
+        resolved_configs = _build_context_builder_phase_rag_configs(
+            workspace_id=workspace_id,
+            parent_artifact=parent_artifact,
+            context_builder_configs=resolved_configs,
+        )
+    elif selected_stage == ANSWER_EVALUATION_STAGE:
+        parent_artifact = _require_latest_context_builder_artifact(workspace_id)
+        resolved_configs = _build_answer_evaluation_phase_rag_configs(
+            workspace_id=workspace_id,
+            parent_artifact=parent_artifact,
+            answer_configs=resolved_configs,
+        )
 
     rag_configs = [
         _apply_rag_config_runtime_options(rag_config, top_k, selected_stage)
@@ -246,6 +288,42 @@ def _resolve_run_rag_config(
 
     selected_stage = stage.strip().lower() if stage else rag_config.rag_stage
     selected_phase = validate_enabled_rag_phase(phase_id=selected_stage, workspace_id=workspace_id)
+    if selected_phase.phase_id == QUERY_TRANSFORM_EVALUATION_STAGE and rag_config.rag_stage == QUERY_TRANSFORM_EVALUATION_STAGE:
+        return _apply_rag_config_runtime_options(
+            _build_query_transform_run_config(
+                workspace_id=workspace_id,
+                query_transform_config=rag_config,
+            ),
+            top_k,
+            selected_phase.phase_id,
+        )
+    if selected_phase.phase_id == RERANKER_EVALUATION_STAGE and rag_config.rag_stage == RERANKER_EVALUATION_STAGE:
+        return _apply_rag_config_runtime_options(
+            _build_reranker_run_config(
+                workspace_id=workspace_id,
+                reranker_config=rag_config,
+            ),
+            top_k,
+            selected_phase.phase_id,
+        )
+    if selected_phase.phase_id == CONTEXT_BUILDER_EVALUATION_STAGE and rag_config.rag_stage == CONTEXT_BUILDER_EVALUATION_STAGE:
+        return _apply_rag_config_runtime_options(
+            _build_context_builder_run_config(
+                workspace_id=workspace_id,
+                context_builder_config=rag_config,
+            ),
+            top_k,
+            selected_phase.phase_id,
+        )
+    if selected_phase.phase_id == ANSWER_EVALUATION_STAGE and rag_config.rag_stage == ANSWER_EVALUATION_STAGE:
+        return _apply_rag_config_runtime_options(
+            _build_answer_evaluation_run_config(
+                workspace_id=workspace_id,
+                answer_config=rag_config,
+            ),
+            top_k,
+            selected_phase.phase_id,
+        )
     if config_id and rag_config.rag_stage != selected_phase.phase_id:
         raise HTTPException(
             status_code=400,
@@ -314,6 +392,78 @@ def _require_latest_chunking_artifact(workspace_id: str):
     return artifact
 
 
+def _require_latest_retriever_artifact(workspace_id: str):
+    artifact = get_latest_phase_artifact(
+        workspace_id=workspace_id,
+        phase_id=RETRIEVER_EVALUATION_STAGE,
+    )
+    if artifact is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Run retriever evaluation before query transform evaluation.",
+        )
+    if not artifact.kept_config_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest retriever evaluation artifact has no kept candidates.",
+        )
+    return artifact
+
+
+def _require_latest_query_transform_artifact(workspace_id: str):
+    artifact = get_latest_phase_artifact(
+        workspace_id=workspace_id,
+        phase_id=QUERY_TRANSFORM_EVALUATION_STAGE,
+    )
+    if artifact is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Run query transform evaluation before reranker evaluation.",
+        )
+    if not artifact.kept_config_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest query transform evaluation artifact has no kept candidates.",
+        )
+    return artifact
+
+
+def _require_latest_reranker_artifact(workspace_id: str):
+    artifact = get_latest_phase_artifact(
+        workspace_id=workspace_id,
+        phase_id=RERANKER_EVALUATION_STAGE,
+    )
+    if artifact is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Run reranker evaluation before context builder evaluation.",
+        )
+    if not artifact.kept_config_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest reranker evaluation artifact has no kept candidates.",
+        )
+    return artifact
+
+
+def _require_latest_context_builder_artifact(workspace_id: str):
+    artifact = get_latest_phase_artifact(
+        workspace_id=workspace_id,
+        phase_id=CONTEXT_BUILDER_EVALUATION_STAGE,
+    )
+    if artifact is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Run context builder evaluation before answer evaluation.",
+        )
+    if not artifact.kept_config_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest context builder evaluation artifact has no kept candidates.",
+        )
+    return artifact
+
+
 def _build_retriever_phase_rag_configs(
     parent_artifact: PhaseArtifact,
     retriever_configs: list[RagConfigPreset],
@@ -373,11 +523,385 @@ def _build_retriever_phase_rag_configs(
                     query_transform=retriever_config.query_transform,
                     reranker=retriever_config.reranker,
                     context_builder=retriever_config.context_builder,
+                    answer_generator=retriever_config.answer_generator,
                 )
             )
             seen_config_ids.add(config_id)
 
     return combined_configs
+
+
+def _build_query_transform_run_config(
+    workspace_id: str,
+    query_transform_config: RagConfigPreset,
+) -> RagConfigPreset:
+    parent_artifact = _require_latest_retriever_artifact(workspace_id)
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest retriever evaluation artifact has no usable kept candidates.",
+        )
+
+    parent_candidate = kept_candidates[0]
+    retriever_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+    return _combine_retriever_and_query_transform_config(
+        retriever_config=retriever_run.rag_config,
+        query_transform_config=query_transform_config,
+        parent_artifact=parent_artifact,
+    )
+
+
+def _build_query_transform_phase_rag_configs(
+    workspace_id: str,
+    parent_artifact: PhaseArtifact,
+    query_transform_configs: list[RagConfigPreset],
+) -> list[RagConfigPreset]:
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest retriever evaluation artifact has no usable kept candidates.",
+        )
+
+    combined_configs: list[RagConfigPreset] = []
+    seen_config_ids: set[str] = set()
+    for parent_candidate in kept_candidates:
+        retriever_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+        for query_transform_config in query_transform_configs:
+            combined_config = _combine_retriever_and_query_transform_config(
+                retriever_config=retriever_run.rag_config,
+                query_transform_config=query_transform_config,
+                parent_artifact=parent_artifact,
+            )
+            if combined_config.config_id in seen_config_ids:
+                continue
+            combined_configs.append(combined_config)
+            seen_config_ids.add(combined_config.config_id)
+
+    return combined_configs
+
+
+def _build_reranker_run_config(
+    workspace_id: str,
+    reranker_config: RagConfigPreset,
+) -> RagConfigPreset:
+    parent_artifact = _require_latest_query_transform_artifact(workspace_id)
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest query transform evaluation artifact has no usable kept candidates.",
+        )
+
+    parent_candidate = kept_candidates[0]
+    query_transform_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+    return _combine_query_transform_and_reranker_config(
+        query_transform_config=query_transform_run.rag_config,
+        reranker_config=reranker_config,
+        parent_artifact=parent_artifact,
+    )
+
+
+def _build_reranker_phase_rag_configs(
+    workspace_id: str,
+    parent_artifact: PhaseArtifact,
+    reranker_configs: list[RagConfigPreset],
+) -> list[RagConfigPreset]:
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest query transform evaluation artifact has no usable kept candidates.",
+        )
+
+    combined_configs: list[RagConfigPreset] = []
+    seen_config_ids: set[str] = set()
+    for parent_candidate in kept_candidates:
+        query_transform_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+        for reranker_config in reranker_configs:
+            combined_config = _combine_query_transform_and_reranker_config(
+                query_transform_config=query_transform_run.rag_config,
+                reranker_config=reranker_config,
+                parent_artifact=parent_artifact,
+            )
+            if combined_config.config_id in seen_config_ids:
+                continue
+            combined_configs.append(combined_config)
+            seen_config_ids.add(combined_config.config_id)
+
+    return combined_configs
+
+
+def _build_context_builder_run_config(
+    workspace_id: str,
+    context_builder_config: RagConfigPreset,
+) -> RagConfigPreset:
+    parent_artifact = _require_latest_reranker_artifact(workspace_id)
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest reranker evaluation artifact has no usable kept candidates.",
+        )
+
+    parent_candidate = kept_candidates[0]
+    reranker_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+    return _combine_reranker_and_context_builder_config(
+        reranker_config=reranker_run.rag_config,
+        context_builder_config=context_builder_config,
+        parent_artifact=parent_artifact,
+    )
+
+
+def _build_context_builder_phase_rag_configs(
+    workspace_id: str,
+    parent_artifact: PhaseArtifact,
+    context_builder_configs: list[RagConfigPreset],
+) -> list[RagConfigPreset]:
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest reranker evaluation artifact has no usable kept candidates.",
+        )
+
+    combined_configs: list[RagConfigPreset] = []
+    seen_config_ids: set[str] = set()
+    for parent_candidate in kept_candidates:
+        reranker_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+        for context_builder_config in context_builder_configs:
+            combined_config = _combine_reranker_and_context_builder_config(
+                reranker_config=reranker_run.rag_config,
+                context_builder_config=context_builder_config,
+                parent_artifact=parent_artifact,
+            )
+            if combined_config.config_id in seen_config_ids:
+                continue
+            combined_configs.append(combined_config)
+            seen_config_ids.add(combined_config.config_id)
+
+    return combined_configs
+
+
+def _build_answer_evaluation_run_config(
+    workspace_id: str,
+    answer_config: RagConfigPreset,
+) -> RagConfigPreset:
+    parent_artifact = _require_latest_context_builder_artifact(workspace_id)
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest context builder evaluation artifact has no usable kept candidates.",
+        )
+
+    parent_candidate = kept_candidates[0]
+    context_builder_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+    return _combine_context_builder_and_answer_config(
+        context_builder_config=context_builder_run.rag_config,
+        answer_config=answer_config,
+        parent_artifact=parent_artifact,
+    )
+
+
+def _build_answer_evaluation_phase_rag_configs(
+    workspace_id: str,
+    parent_artifact: PhaseArtifact,
+    answer_configs: list[RagConfigPreset],
+) -> list[RagConfigPreset]:
+    kept_candidates = _get_kept_artifact_candidates(parent_artifact)
+    if not kept_candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="Latest context builder evaluation artifact has no usable kept candidates.",
+        )
+
+    combined_configs: list[RagConfigPreset] = []
+    seen_config_ids: set[str] = set()
+    for parent_candidate in kept_candidates:
+        context_builder_run = get_workspace_experiment(workspace_id=workspace_id, run_id=parent_candidate.run_id)
+        for answer_config in answer_configs:
+            combined_config = _combine_context_builder_and_answer_config(
+                context_builder_config=context_builder_run.rag_config,
+                answer_config=answer_config,
+                parent_artifact=parent_artifact,
+            )
+            if combined_config.config_id in seen_config_ids:
+                continue
+            combined_configs.append(combined_config)
+            seen_config_ids.add(combined_config.config_id)
+
+    return combined_configs
+
+
+def _combine_retriever_and_query_transform_config(
+    retriever_config: RagConfigPreset | None,
+    query_transform_config: RagConfigPreset,
+    parent_artifact: PhaseArtifact,
+) -> RagConfigPreset:
+    if retriever_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Retriever artifact candidate is missing rag_config details.",
+        )
+
+    transform_token = _combined_config_token(query_transform_config.query_transform.type)
+    parent_token = _combined_config_token(retriever_config.config_id)
+    query_transform_params = {
+        **query_transform_config.query_transform.params,
+        "source_retriever_config_id": retriever_config.config_id,
+        "parent_artifact_id": parent_artifact.artifact_id,
+    }
+    return RagConfigPreset(
+        config_id=f"cfg_query_transform__{parent_token}__{transform_token}",
+        name=f"{retriever_config.name} + {query_transform_config.name}",
+        description=(
+            "Query transform candidate generated from the latest kept retriever "
+            f"candidate '{retriever_config.config_id}'."
+        ),
+        rag_stage=QUERY_TRANSFORM_EVALUATION_STAGE,
+        strategy=retriever_config.strategy,
+        top_k=retriever_config.top_k,
+        chunking=retriever_config.chunking,
+        retriever=retriever_config.retriever,
+        query_transform=RagConfigComponent(
+            type=query_transform_config.query_transform.type,
+            params=query_transform_params,
+        ),
+        reranker=retriever_config.reranker,
+        context_builder=retriever_config.context_builder,
+        answer_generator=retriever_config.answer_generator,
+    )
+
+
+def _combine_query_transform_and_reranker_config(
+    query_transform_config: RagConfigPreset | None,
+    reranker_config: RagConfigPreset,
+    parent_artifact: PhaseArtifact,
+) -> RagConfigPreset:
+    if query_transform_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Query transform artifact candidate is missing rag_config details.",
+        )
+
+    reranker_token = _combined_config_token(reranker_config.reranker.type)
+    parent_token = _combined_config_token(query_transform_config.config_id)
+    reranker_params = {
+        **reranker_config.reranker.params,
+        "source_query_transform_config_id": query_transform_config.config_id,
+        "parent_artifact_id": parent_artifact.artifact_id,
+    }
+    return RagConfigPreset(
+        config_id=f"cfg_reranker__{parent_token}__{reranker_token}",
+        name=f"{query_transform_config.name} + {reranker_config.name}",
+        description=(
+            "Reranker candidate generated from the latest kept query transform "
+            f"candidate '{query_transform_config.config_id}'."
+        ),
+        rag_stage=RERANKER_EVALUATION_STAGE,
+        strategy=query_transform_config.strategy,
+        top_k=query_transform_config.top_k,
+        chunking=query_transform_config.chunking,
+        retriever=query_transform_config.retriever,
+        query_transform=query_transform_config.query_transform,
+        reranker=RagConfigComponent(
+            type=reranker_config.reranker.type,
+            params=reranker_params,
+        ),
+        context_builder=query_transform_config.context_builder,
+        answer_generator=query_transform_config.answer_generator,
+    )
+
+
+def _combine_reranker_and_context_builder_config(
+    reranker_config: RagConfigPreset | None,
+    context_builder_config: RagConfigPreset,
+    parent_artifact: PhaseArtifact,
+) -> RagConfigPreset:
+    if reranker_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Reranker artifact candidate is missing rag_config details.",
+        )
+
+    context_builder_token = _combined_config_token(context_builder_config.context_builder.type)
+    parent_token = _combined_config_token(reranker_config.config_id)
+    context_builder_params = {
+        **context_builder_config.context_builder.params,
+        "source_reranker_config_id": reranker_config.config_id,
+        "parent_artifact_id": parent_artifact.artifact_id,
+    }
+    return RagConfigPreset(
+        config_id=f"cfg_context_builder__{parent_token}__{context_builder_token}",
+        name=f"{reranker_config.name} + {context_builder_config.name}",
+        description=(
+            "Context builder candidate generated from the latest kept reranker "
+            f"candidate '{reranker_config.config_id}'."
+        ),
+        rag_stage=CONTEXT_BUILDER_EVALUATION_STAGE,
+        strategy=reranker_config.strategy,
+        top_k=reranker_config.top_k,
+        chunking=reranker_config.chunking,
+        retriever=reranker_config.retriever,
+        query_transform=reranker_config.query_transform,
+        reranker=reranker_config.reranker,
+        context_builder=RagConfigComponent(
+            type=context_builder_config.context_builder.type,
+            params=context_builder_params,
+        ),
+        answer_generator=reranker_config.answer_generator,
+    )
+
+
+def _combine_context_builder_and_answer_config(
+    context_builder_config: RagConfigPreset | None,
+    answer_config: RagConfigPreset,
+    parent_artifact: PhaseArtifact,
+) -> RagConfigPreset:
+    if context_builder_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Context builder artifact candidate is missing rag_config details.",
+        )
+
+    answer_token = _combined_config_token(answer_config.answer_generator.type)
+    parent_token = _combined_config_token(context_builder_config.config_id)
+    answer_params = {
+        **answer_config.answer_generator.params,
+        "source_context_builder_config_id": context_builder_config.config_id,
+        "parent_artifact_id": parent_artifact.artifact_id,
+    }
+    return RagConfigPreset(
+        config_id=f"cfg_answer__{parent_token}__{answer_token}",
+        name=f"{context_builder_config.name} + {answer_config.name}",
+        description=(
+            "Answer evaluation candidate generated from the latest kept context builder "
+            f"candidate '{context_builder_config.config_id}'."
+        ),
+        rag_stage=ANSWER_EVALUATION_STAGE,
+        strategy=context_builder_config.strategy,
+        top_k=context_builder_config.top_k,
+        chunking=context_builder_config.chunking,
+        retriever=context_builder_config.retriever,
+        query_transform=context_builder_config.query_transform,
+        reranker=context_builder_config.reranker,
+        context_builder=context_builder_config.context_builder,
+        answer_generator=RagConfigComponent(
+            type=answer_config.answer_generator.type,
+            params=answer_params,
+        ),
+    )
+
+
+def _get_kept_artifact_candidates(parent_artifact: PhaseArtifact):
+    kept_config_ids = set(parent_artifact.kept_config_ids)
+    return [
+        candidate
+        for candidate in parent_artifact.candidates
+        if candidate.status == "kept" and candidate.config_id in kept_config_ids
+    ]
 
 
 def _combined_config_token(config_id: str) -> str:
@@ -406,9 +930,170 @@ def _apply_rag_config_runtime_options(
     )
 
 
+def _build_query_transform_function(rag_config: RagConfigPreset):
+    transform_type = rag_config.query_transform.type.strip().lower()
+    if transform_type in {"", "none"}:
+        return None
+
+    if transform_type == "rewrite":
+        return _rewrite_case_question
+
+    return None
+
+
+def _build_reranker_function(rag_config: RagConfigPreset):
+    reranker_type = rag_config.reranker.type.strip().lower()
+    if reranker_type in {"", "none"}:
+        return None
+
+    if reranker_type == "lexical_overlap":
+        return _rerank_by_lexical_overlap
+
+    return None
+
+
+def _build_context_builder_function(rag_config: RagConfigPreset):
+    context_builder_type = rag_config.context_builder.type.strip().lower()
+    if context_builder_type in {"", "plain_top_k"}:
+        return None
+
+    if context_builder_type == "document_window":
+        return _build_document_window_context
+
+    return None
+
+
+def _build_answer_generator_function(rag_config: RagConfigPreset):
+    answer_generator_type = rag_config.answer_generator.type.strip().lower()
+    if answer_generator_type in {"", "none"}:
+        return None
+    if answer_generator_type == "grounded_mock":
+        return _generate_grounded_mock_answer
+    if answer_generator_type == "extract_then_mock":
+        return _generate_extract_then_mock_answer
+    return None
+
+
+def _resolve_retrieval_top_k(rag_config: RagConfigPreset) -> int | None:
+    reranker_type = rag_config.reranker.type.strip().lower()
+    if reranker_type in {"", "none"}:
+        return None
+    return max(rag_config.top_k * 3, rag_config.top_k + 5)
+
+
+def _rewrite_case_question(case: RetrievalEvalCase) -> str:
+    question = case.question.strip()
+    if not question:
+        return question
+
+    simplified = question
+    leading_patterns = [
+        r"^what does (this|the) (workspace|document|corpus) say about\s+",
+        r"^tell me about\s+",
+        r"^explain\s+",
+        r"^describe\s+",
+        r"^what is\s+",
+        r"^how does\s+",
+        r"^how do\s+",
+        r"^can you explain\s+",
+    ]
+    for pattern in leading_patterns:
+        simplified = re.sub(pattern, "", simplified, flags=re.IGNORECASE)
+
+    simplified = re.sub(r"[?!.:,;]+", " ", simplified)
+    simplified = re.sub(r"\s+", " ", simplified).strip()
+    if not simplified:
+        return question
+    if simplified.lower() == question.lower().strip(" ?!.,:;"):
+        return question
+    return simplified
+
+
+def _rerank_by_lexical_overlap(question: str, results: list):
+    query_tokens = _token_set(question)
+    if not query_tokens:
+        return results
+
+    def rerank_score(item):
+        content_tokens = _token_set(item.content)
+        overlap = len(query_tokens & content_tokens)
+        return (
+            overlap,
+            item.score,
+            -item.chunk_index,
+        )
+
+    return sorted(results, key=rerank_score, reverse=True)
+
+
+def _build_document_window_context(question: str, results: list):
+    _ = question
+    if len(results) <= 1:
+        return results
+
+    primary = results[0]
+    same_document_neighbors = [
+        item
+        for item in results[1:]
+        if item.document_id == primary.document_id and abs(item.chunk_index - primary.chunk_index) <= 1
+    ]
+    remaining = [
+        item
+        for item in results[1:]
+        if item not in same_document_neighbors
+    ]
+    return [primary, *same_document_neighbors, *remaining]
+
+
+def _generate_grounded_mock_answer(case: RetrievalEvalCase, retrieval_question: str, results: list) -> str:
+    _ = case
+    if not results:
+        return "The available documents do not contain enough information to answer this question."
+
+    context_lines = [
+        f"[{index}] {result.document_title}: {_normalize_preview(result.content, 180)}"
+        for index, result in enumerate(results[:3], start=1)
+    ]
+    return (
+        f"Question: {retrieval_question}\n"
+        "Grounded answer draft:\n"
+        f"{' '.join(_normalize_preview(result.content, 120) for result in results[:2])}\n\n"
+        "Evidence:\n"
+        + "\n".join(context_lines)
+    )
+
+
+def _generate_extract_then_mock_answer(case: RetrievalEvalCase, retrieval_question: str, results: list) -> str:
+    _ = case
+    if not results:
+        return "The available documents do not contain enough information to answer this question."
+
+    lead = _normalize_preview(results[0].content, 220)
+    return (
+        f"Question: {retrieval_question}\n"
+        "Answer draft from strongest source:\n"
+        f"{lead}"
+    )
+
+
+def _normalize_preview(content: str, limit: int) -> str:
+    normalized = " ".join(content.split())
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit].rstrip()}..."
+
+
+def _token_set(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-zA-Z0-9]+", text.lower())
+        if len(token) >= 2
+    }
+
+
 def _load_rag_config_from_payload(payload: dict) -> RagConfigPreset:
     if payload.get("rag_config"):
-        return RagConfigPreset(**payload["rag_config"])
+        return RagConfigPreset(**_normalize_rag_config_payload(payload["rag_config"]))
 
     if payload.get("config_id"):
         return _apply_rag_config_runtime_options(
@@ -422,6 +1107,13 @@ def _load_rag_config_from_payload(payload: dict) -> RagConfigPreset:
         payload.get("top_k", 5),
         payload.get("rag_stage", DEFAULT_COMPARISON_STAGE),
     )
+
+
+def _normalize_rag_config_payload(payload: dict) -> dict:
+    return {
+        **payload,
+        "answer_generator": payload.get("answer_generator", {"type": "none", "params": {}}),
+    }
 
 
 def _build_runtime_chunks_for_config(
@@ -599,13 +1291,24 @@ def _compute_comparison_score(
 ) -> float:
     max_latency = max((item.metrics.avg_latency_ms for item in summaries), default=0.0)
     latency_penalty = metrics.avg_latency_ms / max_latency if max_latency > 0 else 0.0
-    score = (
-        0.40 * metrics.hit_at_k
-        + 0.30 * metrics.mrr
-        + 0.20 * metrics.recall_at_k
-        + 0.10 * metrics.precision_at_k
-        - 0.10 * latency_penalty
-    )
+    if metrics.answer_case_count > 0:
+        score = (
+            0.25 * metrics.avg_answer_match_score
+            + 0.25 * metrics.hit_at_k
+            + 0.20 * metrics.mrr
+            + 0.15 * metrics.recall_at_k
+            + 0.10 * metrics.precision_at_k
+            + 0.05 * metrics.answer_present_rate
+            - 0.10 * latency_penalty
+        )
+    else:
+        score = (
+            0.40 * metrics.hit_at_k
+            + 0.30 * metrics.mrr
+            + 0.20 * metrics.recall_at_k
+            + 0.10 * metrics.precision_at_k
+            - 0.10 * latency_penalty
+        )
     return round(max(score, 0.0), 4)
 
 
@@ -838,6 +1541,11 @@ def _serialize_result(item: object) -> dict:
         "precision_at_k": item.precision_at_k,
         "reciprocal_rank": item.reciprocal_rank,
         "latency_ms": item.latency_ms,
+        "generated_answer": item.generated_answer,
+        "reference_answer": item.reference_answer,
+        "source_count": item.source_count,
+        "answer_present": item.answer_present,
+        "answer_match_score": item.answer_match_score,
     }
 
 
@@ -846,6 +1554,11 @@ def _normalize_result_payload(item: dict) -> dict:
         return {
             **item,
             "label_type": item.get("label_type", "strong_chunk_ids"),
+            "generated_answer": item.get("generated_answer", ""),
+            "reference_answer": item.get("reference_answer", ""),
+            "source_count": item.get("source_count", 0),
+            "answer_present": item.get("answer_present", False),
+            "answer_match_score": item.get("answer_match_score", 0.0),
         }
     return {
         **item,
@@ -854,6 +1567,11 @@ def _normalize_result_payload(item: dict) -> dict:
         "returned_source_paths": item.get("returned_source_paths", []),
         "returned_doc_types": item.get("returned_doc_types", []),
         "label_type": item.get("label_type", "strong_chunk_ids"),
+        "generated_answer": item.get("generated_answer", ""),
+        "reference_answer": item.get("reference_answer", ""),
+        "source_count": item.get("source_count", 0),
+        "answer_present": item.get("answer_present", False),
+        "answer_match_score": item.get("answer_match_score", 0.0),
     }
 
 
@@ -889,6 +1607,10 @@ def _build_markdown_report(payload: dict) -> str:
         f"- Min Chunk Size: {metrics.get('min_chunk_size', 0)}",
         f"- Max Chunk Size: {metrics.get('max_chunk_size', 0)}",
         f"- Coverage Ratio: {metrics.get('coverage_ratio', 0.0):.4f}",
+        f"- Answer Cases: {metrics.get('answer_case_count', 0)}",
+        f"- Answer Reference Cases: {metrics.get('answer_reference_case_count', 0)}",
+        f"- Answer Present Rate: {metrics.get('answer_present_rate', 0.0):.4f}",
+        f"- Avg Answer Match Score: {metrics.get('avg_answer_match_score', 0.0):.4f}",
         "",
     ]
 
@@ -913,6 +1635,9 @@ def _build_markdown_report(payload: dict) -> str:
                     f"- Returned Sources: {', '.join(result.get('returned_source_paths', [])) or '(none)'}",
                     f"- Returned Doc Types: {', '.join(result.get('returned_doc_types', [])) or '(none)'}",
                     f"- Notes: {result['notes'] or '(none)'}",
+                    f"- Generated Answer: {result.get('generated_answer', '') or '(none)'}",
+                    f"- Reference Answer: {result.get('reference_answer', '') or '(none)'}",
+                    f"- Answer Match Score: {result.get('answer_match_score', 0.0):.4f}",
                     "",
                 ]
             )
@@ -943,6 +1668,11 @@ def _build_markdown_report(payload: dict) -> str:
                 f"- Precision@k: {result['precision_at_k']:.4f}",
                 f"- RR: {result['reciprocal_rank']:.4f}",
                 f"- Latency (ms): {result['latency_ms']:.2f}",
+                f"- Source Count: {result.get('source_count', 0)}",
+                f"- Generated Answer: {result.get('generated_answer', '') or '(none)'}",
+                f"- Reference Answer: {result.get('reference_answer', '') or '(none)'}",
+                f"- Answer Present: {result.get('answer_present', False)}",
+                f"- Answer Match Score: {result.get('answer_match_score', 0.0):.4f}",
                 "",
             ]
         )
